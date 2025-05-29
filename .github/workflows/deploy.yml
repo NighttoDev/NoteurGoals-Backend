@@ -1,0 +1,98 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ secrets.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and Test
+      run: |
+        docker-compose -f docker-compose.prod.yml build
+        docker-compose -f docker-compose.prod.yml up -d
+        docker-compose -f docker-compose.prod.yml exec -T app composer install --no-dev
+        docker-compose -f docker-compose.prod.yml exec -T app php artisan test
+      env:
+        DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_PORT: ${{ secrets.DB_PORT }}
+        DB_DATABASE: ${{ secrets.DB_DATABASE }}
+        DB_USERNAME: ${{ secrets.DB_USERNAME }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    
+    - name: Cache Docker layers
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    
+    - name: Deploy to cPanel
+      uses: SamKirkland/FTP-Deploy-Action@4.3.4
+      with:
+        server: ${{ secrets.FTP_HOST }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./src/
+        server-dir: /public_html/
+        exclude: |
+          **/.git*
+          **/node_modules/**
+          **/.env
+          **/tests/**
+          **/docker-compose*
+          **/Dockerfile
+          **/storage/logs/*
+          **/storage/framework/cache/*
+    
+    - name: Post-deployment Setup
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd /public_html
+          composer install --no-dev --optimize-autoloader
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          php artisan migrate --force
+          chmod -R 755 storage bootstrap/cache
+          chown -R www-data:www-data storage bootstrap/cache
+          # Restart PHP-FPM if needed
+          sudo systemctl restart php-fpm
+    
+    - name: Health Check
+      run: |
+        curl -f ${{ secrets.APP_URL }}/health || exit 1
+    
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "✅ Deployment completed successfully!"
+        # Add notification to Slack/Discord if needed
+    
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed!"
+        # Add notification to Slack/Discord if needed 
