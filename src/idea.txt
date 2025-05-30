@@ -1,0 +1,121 @@
+DỰ ÁN Note To Get Your Goal
+1. Lập kế hoạch & Phân tích yêu cầu
+1.1. Xác định mục tiêu dự án
+• Tên Dự Án: Note To Get Your Goal – Hệ thống Ghi chú & Quản lý Mục tiêu Thông minh
+• Mục tiêu chính: Cho phép người dùng (đặc biệt là học sinh, sinh viên) tạo, quản lý và theo dõi mục tiêu cá nhân theo từng ngày, kì hoặc khóa học.
+o Phân chia mục tiêu thành các bước nhỏ (milestones) và đo lường hiệu suất thông qua biểu đồ, chỉ số trực quan.
+o Hỗ trợ chia sẻ hành trình và thành tích giữa người dùng để tăng động lực, khuyến khích trao đổi kinh nghiệm.
+o Tương tác cộng đồng: Người dùng có thể trực tiếp tham gia vào mục tiêu của bạn bè để thực hiện chung, từ đó cùng nhau hoàn thành mục tiêu và chia sẻ kinh nghiệm.
+o Tích hợp hỗ trợ:
+▪ Kết nối với các khóa học, tài liệu học tập để cung cấp nguồn tài nguyên bổ trợ.
+▪ Tích hợp AI Agent (được xây dựng dưới dạng microservice với Python) để phân tích dữ liệu, đưa ra gợi ý cải thiện và dự báo hành trình đạt mục tiêu.
+• Yêu cầu kỹ thuật:
+o Giao diện thân thiện, phản hồi nhanh và tối ưu SEO.
+o Bảo mật dữ liệu người dùng cao với chuẩn giao dịch ACID.
+o Kiến trúc có khả năng mở rộng linh hoạt, dễ tích hợp thêm các dịch vụ phụ trợ (Realtime, AI, chia sẻ mục tiêu chung).
+1.2. Thu thập yêu cầu
+• Đối tượng người dùng chính:
+o Học sinh, sinh viên và những người có nhu cầu quản lý mục tiêu cá nhân cũng như mong muốn tương tác và hợp tác cùng bạn bè.
+• Chức năng cốt lõi:
+o Quản lý mục tiêu: Tạo, chỉnh sửa, xóa mục tiêu và phân chia mục tiêu thành các bước nhỏ (milestones).
+o Ghi chú & Lịch biểu: Cho phép người dùng ghi chú, lên lịch và nhận thông báo nhắc nhở.
+o Phân tích & Hiệu suất: Tích hợp AI Agent để phân tích tiến độ, đưa ra gợi ý cải thiện dựa trên dữ liệu thực tế.
+o Tương tác & Chia sẻ: Cung cấp nền tảng để người dùng chia sẻ hành trình, đăng tải mục tiêu và cho phép người dùng khác tham gia trực tiếp vào mục tiêu của bạn bè nhằm hoàn thành chung.
+• Yêu cầu phi chức năng:
+o Hiệu suất cao, bảo mật tốt, khả năng mở rộng và dễ bảo trì trong quá trình phát triển.
+1.3. Thiết kế hệ thống và sơ đồ kiến trúc
+• Sơ đồ luồng dữ liệu (DFD): Mô tả quá trình dữ liệu từ giao diện người dùng (frontend) đến backend, lưu trữ trong MySQL và xử lý bởi các module tích hợp AI, Realtime (Socket.IO) và dịch vụ lưu trữ file.
+• Sơ đồ ERD (Entity Relationship Diagram): Xác định các thực thể chính như User, Goal, Milestone, Note, Course và Performance Metrics cùng với mối quan hệ bao gồm cả việc cho phép người dùng tham gia vào mục tiêu của bạn bè.
+• Wireframe/UI design: Dùng Figma hoặc Adobe XD để tạo giao diện mẫu.
+2. Lựa chọn công nghệ
+2.1 Frontend
+• Công nghệ: Nuxt.js
+• Lý do chọn:
+o Nuxt.js cung cấp server-side rendering (SSR) và static site generation (SSG), giúp cải thiện tốc độ tải trang và SEO.
+o Dựa trên Vue.js, giúp phát triển nhanh chóng và nhất quán.
+o Hỗ trợ tốt cho việc xây dựng ứng dụng có hiệu suất cao và khả năng mở rộng.
+2.2 Backend
+• Công nghệ: Laravel
+• Lý do chọn:
+o Laravel là một framework PHP mạnh mẽ và phổ biến, có cộng đồng hỗ trợ lớn.
+o Cung cấp nhiều tính năng sẵn có như Eloquent ORM, giúp việc tương tác với cơ sở dữ liệu dễ dàng hơn.
+o Hỗ trợ tốt cho việc xây dựng ứng dụng có khả năng mở rộng thông qua kiến trúc microservice và caching.
+2.3 Database
+• Công nghệ: MySQL
+• Lý do chọn:
+o MySQL là một lựa chọn phổ biến và có cộng đồng hỗ trợ lớn.
+o Có khả năng mở rộng tốt thông qua replication và clustering.
+o Hỗ trợ tốt cho các ứng dụng có tải trọng cao.
+2.4 Xác thực và bảo mật
+• Công nghệ: JWT và OAuth2
+• Lý do chọn:
+o JWT giúp thực hiện xác thực và phân quyền người dùng hiệu quả, nhẹ và dễ tích hợp.
+o OAuth2 hỗ trợ đăng nhập qua các tài khoản bên thứ ba nếu cần, tăng tính bảo mật và thuận tiện cho người dùng.
+2.5 Realtime & AI Integration
+• Realtime: Socket.IO
+o Cho phép cập nhật thông tin, thông báo và tương tác thời gian thực giữa người dùng, ví dụ như thông báo khi có ai đó tham gia vào mục tiêu chung.
+• AI Integration:
+o Xây dựng microservice AI với Python (sử dụng TensorFlow/PyTorch hoặc tích hợp API của OpenAI) để phân tích dữ liệu tiến độ, đưa ra gợi ý cải thiện và dự báo hành trình đạt mục tiêu.
+o Giao tiếp với hệ thống chính qua RESTful API hoặc GraphQL.
+2.6 Storage
+• Công nghệ: AWS S3 hoặc Google Cloud Storage
+• Lý do chọn:
+o Giải pháp lưu trữ file đáng tin cậy, bảo mật cao, có khả năng mở rộng linh hoạt cho dữ liệu như hình ảnh, tài liệu và video hướng dẫn.
+3. Phát triển (Development)
+3.1. Thiết lập môi trường
+• Backend:
+o Cài đặt PHP và thiết lập dự án với Laravel.
+o Cấu hình kết nối với MySQL thông qua Eloquent ORM.
+• Frontend:
+o Khởi tạo dự án với Nuxt.js, cài đặt các thư viện cần thiết (Axios, Vue Query, v.v.).
+3.2. Xây dựng API Backend
+• Các endpoint chính:
+o Xác thực: Đăng ký, đăng nhập, làm mới token sử dụng JWT/OAuth2.
+o Quản lý mục tiêu: CRUD cho mục tiêu, milestones và ghi chú.
+o Chia sẻ & Tham gia: Endpoint cho phép người dùng tạo mục tiêu và mời bạn bè tham gia, cũng như cho phép người dùng nhận thông báo khi có người tham gia vào mục tiêu của mình.
+o Tích hợp khóa học & AI: Endpoint để lấy danh sách khóa học và gọi API từ microservice AI để phân tích tiến độ.
+• Tài liệu API:
+o Sử dụng Swagger hoặc Postman để tài liệu hóa API.
+3.3. Xây dựng Frontend
+• Trang chủ & Đăng nhập:
+o Thiết kế giao diện thân thiện với người dùng, tích hợp form đăng ký/đăng nhập và chức năng OAuth2 nếu cần.
+• Dashboard:
+o Hiển thị danh sách mục tiêu, tiến độ, biểu đồ hiệu suất và thông báo thời gian thực.
+• Chức năng chia sẻ & tham gia:
+o Cho phép người dùng đăng tải mục tiêu, chia sẻ hành trình và tham gia vào mục tiêu của bạn bè thông qua giao diện trực quan và dễ sử dụng.
+3.4. Tích hợp Realtime & Storage
+• Realtime:
+o Sử dụng Socket.IO để cập nhật thông báo, thông tin tương tác và khi có người tham gia vào mục tiêu chung.
+• Storage:
+o Tích hợp AWS S3 hoặc Google Cloud Storage để lưu trữ file, hình ảnh và tài liệu liên quan.
+4. Kiểm thử (Testing)
+4.1. Kiểm thử Backend
+• Unit Test & Integration Test:
+o Sử dụng PHPUnit để viết test cho các module API.
+• Kiểm tra sự tương tác giữa các endpoint và database.
+4.2. Kiểm thử Frontend
+• Component & Unit Test:
+o Sử dụng Jest cùng Vue Testing Library để kiểm tra tính năng của từng component.
+• End-to-End (E2E) Test:
+o Sử dụng Cypress hoặc Selenium để mô phỏng hành trình người dùng hoàn chỉnh.
+4.3. Kiểm thử toàn hệ thống
+• Tích hợp hệ thống:
+o Kiểm tra liên kết giữa frontend, backend và microservice AI, đảm bảo dữ liệu được xử lý và hiển thị đúng.
+• Load Testing & Security Testing:
+o Sử dụng Apache JMeter và các công cụ bảo mật để đánh giá hiệu suất và bảo vệ hệ thống.
+5. Triển khai (Deployment)
+5.1. Cấu hình máy chủ
+• Container hóa ứng dụng:
+o Sử dụng Docker để đóng gói các thành phần: frontend (Nuxt.js), backend (Laravel) và microservice AI.
+• Reverse Proxy & Load Balancer:
+o Triển khai Nginx để điều phối lưu lượng và tối ưu hiệu suất hệ thống.
+5.2. Cấu hình CI/CD
+• Tự động hóa build & deploy:
+o Sử dụng GitHub Actions để tích hợp các bước build, test và deploy lên môi trường staging/production.
+• Pipeline kiểm thử:
+o Đảm bảo các bài test tự động chạy thành công trước khi merge code.
+5.3. Theo dõi & bảo trì
+• Giám sát hiệu suất:
+o Sử dụng các công cụ như New Relic hoặc Datadog để theo dõi hoạt động hệ thống và phát hiện lỗi sớm.
+• Logging & Backup:
+o Thiết lập hệ thống logging (ví dụ: ELK stack) và backup định kỳ cho cơ sở dữ liệu, đảm bảo phục hồi khi có sự cố.
