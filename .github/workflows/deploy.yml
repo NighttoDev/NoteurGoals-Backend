@@ -1,98 +1,313 @@
-name: Deploy to cPanel
+name: Safe Deploy to cPanel
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allow manual triggers
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  # Job 1: Test với Remote Test Database
+  test:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Login to Docker Registry
-      uses: docker/login-action@v3
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
       with:
-        registry: ${{ secrets.DOCKER_REGISTRY }}
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    
-    - name: Build and Test
+        php-version: '8.1'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, zip
+        
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+      
+    - name: Setup test environment with remote DB
       run: |
-        docker-compose -f docker-compose.prod.yml build
-        docker-compose -f docker-compose.prod.yml up -d
-        docker-compose -f docker-compose.prod.yml exec -T app composer install --no-dev
-        docker-compose -f docker-compose.prod.yml exec -T app php artisan test
+        cp .env.testing .env
+        php artisan key:generate
       env:
-        DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_DATABASE: ${{ secrets.DB_DATABASE }}
-        DB_USERNAME: ${{ secrets.DB_USERNAME }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        DB_CONNECTION: mysql
+        DB_HOST: ${{ secrets.TEST_DB_HOST }}           # Remote test DB host
+        DB_PORT: ${{ secrets.TEST_DB_PORT }}           # Remote test DB port
+        DB_DATABASE: ${{ secrets.TEST_DB_DATABASE }}   # Remote test DB name
+        DB_USERNAME: ${{ secrets.TEST_DB_USERNAME }}   # Remote test DB user
+        DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}   # Remote test DB password
+        
+    - name: Prepare test database
+      run: |
+        echo "🧪 Setting up remote test database..."
+        php artisan migrate:fresh --force
+        php artisan db:seed --class=TestSeeder --force
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: ${{ secrets.TEST_DB_HOST }}
+        DB_PORT: ${{ secrets.TEST_DB_PORT }}
+        DB_DATABASE: ${{ secrets.TEST_DB_DATABASE }}
+        DB_USERNAME: ${{ secrets.TEST_DB_USERNAME }}
+        DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        
+    - name: Run tests on remote DB
+      run: |
+        echo "🚀 Running tests on remote test database..."
+        php artisan test --parallel --stop-on-failure
+        
+        if [ $? -ne 0 ]; then
+          echo "❌ Tests failed! Deployment will be cancelled."
+          exit 1
+        fi
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: ${{ secrets.TEST_DB_HOST }}
+        DB_PORT: ${{ secrets.TEST_DB_PORT }}
+        DB_DATABASE: ${{ secrets.TEST_DB_DATABASE }}
+        DB_USERNAME: ${{ secrets.TEST_DB_USERNAME }}
+        DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+        
+    - name: Cleanup test database
+      if: always()
+      run: |
+        echo "🧹 Cleaning up test database..."
+        php artisan migrate:fresh --force
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: ${{ secrets.TEST_DB_HOST }}
+        DB_PORT: ${{ secrets.TEST_DB_PORT }}
+        DB_DATABASE: ${{ secrets.TEST_DB_DATABASE }}
+        DB_USERNAME: ${{ secrets.TEST_DB_USERNAME }}
+        DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+
+  # Job 2: Build production code (giữ nguyên)
+  build:
+    needs: test
+    runs-on: ubuntu-latest
     
-    - name: Cache Docker layers
-      uses: actions/cache@v3
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
       with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
-    
-    - name: Deploy to cPanel
-      uses: SamKirkland/FTP-Deploy-Action@4.3.4
+        php-version: '8.1'
+        
+    - name: Install production dependencies
+      run: |
+        composer install --optimize-autoloader --no-dev --no-interaction
+        composer dump-autoload --optimize
+        
+    - name: Prepare deployment
+      run: |
+        # Remove development files
+        rm -rf tests/ .github/ docker-compose* Dockerfile .env.testing .env.example
+        rm -rf node_modules/ .git/ php/ nginx/
+        
+        # Create necessary directories
+        mkdir -p storage/{logs,framework/{cache,sessions,views}}
+        touch storage/logs/.gitkeep
+        
+    - name: Create deployment artifact
+      uses: actions/upload-artifact@v3
       with:
-        server: ${{ secrets.FTP_HOST }}
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        local-dir: ./src/
-        server-dir: /public_html/
-        exclude: |
-          **/.git*
-          **/node_modules/**
-          **/.env
-          **/tests/**
-          **/docker-compose*
-          **/Dockerfile
-          **/storage/logs/*
-          **/storage/framework/cache/*
+        name: production-code
+        path: .
+        retention-days: 30
+
+  # Job 3: Deploy (cải thiện backup)
+  deploy:
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    environment: production
     
-    - name: Post-deployment Setup
+    steps:
+    - name: Download production code
+      uses: actions/download-artifact@v3
+      with:
+        name: production-code
+        path: ./deployment
+    
+    - name: Create comprehensive backup
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.SSH_HOST }}
         username: ${{ secrets.SSH_USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         script: |
-          cd /public_html
-          composer install --no-dev --optimize-autoloader
+          # Create backup directory
+          BACKUP_DIR="/home/backups/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p $BACKUP_DIR
+          
+          echo "📦 Creating backend application backup..."
+          if [ -d "/admin.noteurgoals.live" ]; then                    # Updated path
+            tar -czf $BACKUP_DIR/app_backup.tar.gz -C /admin.noteurgoals.live .
+            echo "✅ Backend application backup created"
+          else
+            echo "⚠️ /admin.noteurgoals.live directory not found"
+          fi
+          
+          echo "💾 Creating production database backup..."
+          if command -v mysqldump &> /dev/null; then
+            mysqldump -h${{ secrets.DB_HOST }} -u${{ secrets.DB_USERNAME }} \
+              -p${{ secrets.DB_PASSWORD }} --single-transaction \
+              --routines --triggers ${{ secrets.DB_DATABASE }} > $BACKUP_DIR/db_backup.sql
+            echo "✅ Database backup created"
+          else
+            echo "⚠️ mysqldump not available"
+          fi
+          
+          echo "✅ Backup completed: $BACKUP_DIR"
+
+    - name: Deploy to production
+      uses: SamKirkland/FTP-Deploy-Action@4.3.4
+      with:
+        server: ${{ secrets.FTP_HOST }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./deployment/
+        server-dir: /admin.noteurgoals.live/                          # Updated path
+        exclude: |
+          **/.env*
+          **/storage/logs/*.log
+
+    - name: Post-deployment setup
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd /admin.noteurgoals.live                                  # Updated path
+          
+          # Check if we're in the right directory
+          if [ ! -f "artisan" ]; then
+            echo "❌ Laravel artisan file not found. Wrong directory?"
+            exit 1
+          fi
+          
+          # Backup current .env before creating new one
+          [ -f .env ] && cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+          
+          # Create production .env for backend
+          cat > .env << 'EOF'
+          APP_NAME="NoteurGoals Backend"
+          APP_ENV=production
+          APP_KEY="${{ secrets.APP_KEY }}"
+          APP_DEBUG=false
+          APP_URL="${{ secrets.APP_URL }}"                            # admin.noteurgoals.live URL
+          
+          DB_CONNECTION=mysql
+          DB_HOST="${{ secrets.DB_HOST }}"
+          DB_PORT="${{ secrets.DB_PORT }}"
+          DB_DATABASE="${{ secrets.DB_DATABASE }}"
+          DB_USERNAME="${{ secrets.DB_USERNAME }}"
+          DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+          
+          # CORS configuration for frontend access
+          SANCTUM_STATEFUL_DOMAINS="${{ secrets.FRONTEND_DOMAIN }}"
+          SESSION_DOMAIN="${{ secrets.SESSION_DOMAIN }}"
+          
+          CACHE_DRIVER=file
+          SESSION_DRIVER=file
+          QUEUE_CONNECTION=sync
+          EOF
+          
+          # Install dependencies
+          if command -v composer &> /dev/null; then
+            composer install --no-dev --optimize-autoloader --no-interaction
+            echo "✅ Dependencies installed"
+          else
+            echo "❌ Composer not found"
+            exit 1
+          fi
+          
+          # Set permissions
+          find . -type f -exec chmod 644 {} \;
+          find . -type d -exec chmod 755 {} \;
+          chmod -R 775 storage bootstrap/cache
+          echo "✅ Permissions set"
+          
+          # Laravel optimizations
+          php artisan config:clear
+          php artisan cache:clear
+          php artisan view:clear
+          php artisan route:clear
+          
           php artisan config:cache
           php artisan route:cache
           php artisan view:cache
-          php artisan migrate --force
-          chmod -R 755 storage bootstrap/cache
-          chown -R www-data:www-data storage bootstrap/cache
-          # Restart PHP-FPM if needed
-          sudo systemctl restart php-fpm
-    
-    - name: Health Check
+          echo "✅ Laravel optimized"
+          
+          echo "✅ Deployment setup completed"
+          echo "⚠️ MIGRATION CHECK REQUIRED:"
+          echo "Run: php artisan migrate:status"
+          echo "Then: php artisan migrate --dry-run"
+
+    - name: Health check with retry
       run: |
-        curl -f ${{ secrets.APP_URL }}/health || exit 1
+        echo "🔍 Performing backend health check..."
+        
+        for i in {1..5}; do
+          echo "Attempt $i/5..."
+          sleep 20
+          
+          # Check health endpoint
+          response=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.APP_URL }}/health)
+          
+          if [ $response -eq 200 ]; then
+            echo "✅ Backend health endpoint is healthy (HTTP $response)"
+            
+            # Also check API status
+            api_response=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.APP_URL }}/api/status)
+            if [ $api_response -eq 200 ]; then
+              echo "✅ API endpoints are healthy (HTTP $api_response)"
+              exit 0
+            else
+              echo "⚠️ API endpoints check failed (HTTP $api_response)"
+            fi
+          else
+            echo "⚠️ Backend health check attempt $i failed (HTTP $response)"
+          fi
+        done
+        
+        echo "❌ Backend health check failed after 5 attempts"
+        echo "🔄 Consider rolling back to previous version"
+        exit 1
+
+  # Job 4: Notify with detailed info
+  notify:
+    needs: [test, build, deploy]
+    runs-on: ubuntu-latest
+    if: always()
     
-    - name: Notify deployment success
-      if: success()
+    steps:
+    - name: Deployment notification
       run: |
-        echo "✅ Deployment completed successfully!"
-        # Add notification to Slack/Discord if needed
-    
-    - name: Notify deployment failure
-      if: failure()
-      run: |
-        echo "❌ Deployment failed!"
-        # Add notification to Slack/Discord if needed 
+        echo "=================================="
+        echo "      DEPLOYMENT SUMMARY"
+        echo "=================================="
+        echo "Test Result: ${{ needs.test.result }}"
+        echo "Build Result: ${{ needs.build.result }}"
+        echo "Deploy Result: ${{ needs.deploy.result }}"
+        echo "=================================="
+        
+        if [ "${{ needs.deploy.result }}" == "success" ]; then
+          echo "🎉 DEPLOYMENT SUCCESSFUL!"
+          echo ""
+          echo "📋 Next Steps:"
+          echo "1. Review migration status: php artisan migrate:status"
+          echo "2. Run migrations if needed: php artisan migrate"
+          echo "3. Monitor application for 30 minutes"
+          echo "4. Check error logs if issues occur"
+          echo ""
+          echo "🔗 Backend URL: ${{ secrets.APP_URL }}"
+        else
+          echo "💥 DEPLOYMENT FAILED!"
+          echo ""
+          echo "🔄 Rollback Instructions:"
+          echo "1. SSH to server: ssh ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}"
+          echo "2. Navigate to backup: cd /home/backups/[latest]"
+          echo "3. Restore application: tar -xzf app_backup.tar.gz -C /admin.noteurgoals.live"     # Updated path
+          echo "4. Restore database: mysql -h... -u... -p... [db] < db_backup.sql"
+          echo "5. Restore .env: cp env_backup /admin.noteurgoals.live/.env"                       # Updated path
+        fi

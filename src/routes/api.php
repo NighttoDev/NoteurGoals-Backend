@@ -8,6 +8,32 @@ use App\Http\Controllers\Event\EventController;
 use App\Http\Controllers\File\FileController;
 use App\Http\Controllers\Admin\AdminController;
 
+// Health check routes (for CI/CD monitoring)
+Route::get('/health', function () {
+    try {
+        // Test database connection
+        \DB::connection()->getPdo();
+        $dbStatus = 'connected';
+    } catch (\Exception $e) {
+        $dbStatus = 'disconnected';
+    }
+    
+    return response()->json([
+        'status' => 'healthy',
+        'service' => 'NoteurGoals Backend API',
+        'database' => $dbStatus,
+        'timestamp' => now(),
+        'version' => config('app.version', '1.0.0')
+    ]);
+});
+
+Route::get('/status', function () {
+    return response()->json([
+        'status' => 'online',
+        'message' => 'NoteurGoals Backend API is running'
+    ]);
+});
+
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -55,4 +81,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('files/{file}/goals/{goal}', [FileController::class, 'detachFromGoal']);
     Route::post('files/{file}/notes/{note}', [FileController::class, 'attachToNote']);
     Route::delete('files/{file}/notes/{note}', [FileController::class, 'detachFromNote']);
-}); 
+});

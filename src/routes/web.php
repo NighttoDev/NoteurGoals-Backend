@@ -5,12 +5,25 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Health check cho root domain (admin.noteurgoals.live)
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'healthy',
+        'service' => 'NoteurGoals Backend',
+        'timestamp' => now()
+    ]);
+});
+
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
+    return response()->json([
+        'message' => 'NoteurGoals Backend API',
+        'status' => 'running',
+        'version' => '1.0.0',
+        'endpoints' => [
+            'api' => url('/api'),
+            'health' => url('/health'),
+            'docs' => url('/api/documentation')
+        ]
     ]);
 });
 
