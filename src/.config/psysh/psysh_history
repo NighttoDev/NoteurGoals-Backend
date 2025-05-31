@@ -1,0 +1,8 @@
+DB::select('SHOW TABLES')->ToArray();
+DB::select('SHOW TABLES');
+q
+DB::select('SHOW TABLES');
+q
+DB::select('SHOW TABLES');
+DB::select('SHOW TABLES');
+q
