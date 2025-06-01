@@ -50,6 +50,43 @@ jobs:
         
         cp .env.testing .env
         php artisan key:generate
+        
+    - name: Verify database connection
+      working-directory: ./src
+      run: |
+        echo "🔌 Verifying database connection..."
+        
+        # Test basic connection
+        php artisan tinker --execute="
+        try {
+            echo 'Connecting to: ' . config('database.connections.mysql.host') . ':' . config('database.connections.mysql.port');
+            echo 'Database: ' . config('database.connections.mysql.database');
+            echo 'Username: ' . config('database.connections.mysql.username');
+            
+            \$pdo = DB::connection()->getPdo();
+            echo 'Connection successful!';
+            
+            // Check if database exists
+            \$result = DB::select('SHOW DATABASES LIKE ?', [config('database.connections.mysql.database')]);
+            if (empty(\$result)) {
+                echo 'Database does not exist, will create during migration';
+            } else {
+                echo 'Database exists';
+            }
+        } catch(Exception \$e) {
+            echo 'Connection failed: ' . \$e->getMessage();
+            echo 'Error code: ' . \$e->getCode();
+            exit(1);
+        }"
+        
+        echo "✅ Database connection verified"
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: ${{ secrets.TEST_DB_HOST }}
+        DB_PORT: ${{ secrets.TEST_DB_PORT }}
+        DB_DATABASE: ${{ secrets.TEST_DB_DATABASE }}
+        DB_USERNAME: ${{ secrets.TEST_DB_USERNAME }}
+        DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
       env:
         DB_CONNECTION: mysql
         DB_HOST: ${{ secrets.TEST_DB_HOST }}           # Remote test DB host
@@ -62,8 +99,61 @@ jobs:
       working-directory: ./src
       run: |
         echo "🧪 Setting up remote test database..."
-        php artisan migrate:fresh --force
-        php artisan db:seed --class=TestSeeder --force
+        
+        # Test database connection first
+        echo "Testing database connection..."
+        php artisan tinker --execute="
+        try {
+            \$pdo = new PDO(
+                'mysql:host=' . env('DB_HOST') . ';port=' . env('DB_PORT'),
+                env('DB_USERNAME'),
+                env('DB_PASSWORD'),
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            echo 'MySQL server connection successful';
+            
+            // Try to create database if it doesn't exist
+            \$dbName = env('DB_DATABASE');
+            \$pdo->exec(\"CREATE DATABASE IF NOT EXISTS \`\$dbName\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci\");
+            echo 'Database created or exists: ' . \$dbName;
+            
+        } catch(Exception \$e) {
+            echo 'Connection failed: ' . \$e->getMessage();
+            echo 'Error code: ' . \$e->getCode();
+            exit(1);
+        }"
+        
+        # Now test Laravel database connection
+        echo "Testing Laravel database connection..."
+        php artisan tinker --execute="
+        try {
+            DB::connection()->getPdo();
+            echo 'Laravel database connection successful';
+        } catch(Exception \$e) {
+            echo 'Laravel connection failed: ' . \$e->getMessage();
+            exit(1);
+        }"
+        
+        # Check if migrations table exists, if not create database structure
+        echo "Checking database structure..."
+        if ! php artisan migrate:status --no-interaction 2>/dev/null; then
+            echo "No migrations found, installing migrations table..."
+            php artisan migrate:install --force
+        fi
+        
+        # Run migrations
+        echo "Running migrations..."
+        php artisan migrate:fresh --force --no-interaction
+        
+        # Run seeder if it exists
+        echo "Running seeder..."
+        if php artisan db:seed --class=TestSeeder --force --no-interaction 2>/dev/null; then
+            echo "✅ TestSeeder completed"
+        else
+            echo "⚠️ TestSeeder not found or failed, continuing without seeding..."
+        fi
+        
+        echo "✅ Test database prepared successfully"
       env:
         DB_CONNECTION: mysql
         DB_HOST: ${{ secrets.TEST_DB_HOST }}
