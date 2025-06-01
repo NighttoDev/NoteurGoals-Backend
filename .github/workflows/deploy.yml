@@ -131,7 +131,7 @@ jobs:
         echo "Checking database structure..."
         if ! php artisan migrate:status --no-interaction 2>/dev/null; then
             echo "No migrations found, installing migrations table..."
-            php artisan migrate:install --force
+            php artisan migrate:install
         fi
         
         # Run migrations
