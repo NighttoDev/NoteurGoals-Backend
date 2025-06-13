@@ -122,5 +122,15 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
+    // 'providers' => [
+    // // Các providers khác...
+    // Laravel\Socialite\SocialiteServiceProvider::class,
+    // ],
+
+    // // Thêm vào mảng 'aliases' trước 'maintenance' 
+    // 'aliases' => [
+    // // Các aliases khác...
+    // 'Socialite' => Laravel\Socialite\Facades\Socialite::class,
+    // ],
 
 ];
