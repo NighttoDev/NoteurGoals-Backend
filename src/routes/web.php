@@ -6,25 +6,28 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Health check cho root domain (admin.noteurgoals.live)
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'healthy',
-        'service' => 'NoteurGoals Backend',
-        'timestamp' => now()
-    ]);
-});
+// Route::get('/health', function () {
+//     return response()->json([
+//         'status' => 'healthy',
+//         'service' => 'NoteurGoals Backend',
+//         'timestamp' => now()
+//     ]);
+// });
 
+// Route::get('/', function () {
+//     return response()->json([
+//         'message' => 'NoteurGoals Backend API',
+//         'status' => 'running',
+//         'version' => '1.0.0',
+//         'endpoints' => [
+//             'api' => url('/api'),
+//             'health' => url('/health'),
+//             'docs' => url('/api/documentation')
+//         ]
+//     ]);
+// });
 Route::get('/', function () {
-    return response()->json([
-        'message' => 'NoteurGoals Backend API',
-        'status' => 'running',
-        'version' => '1.0.0',
-        'endpoints' => [
-            'api' => url('/api'),
-            'health' => url('/health'),
-            'docs' => url('/api/documentation')
-        ]
-    ]);
+    return view('app');
 });
 
 Route::get('/dashboard', function () {
