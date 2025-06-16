@@ -12,11 +12,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
+use Illuminate\Support\Facades\Mail;
 
 class AuthController extends Controller
 {
     /**
-     * Đăng ký người dùng mới
+     * Đăng ký người dùng mới với xác thực email
      */
     public function register(Request $request)
     {
@@ -39,34 +40,32 @@ class AuthController extends Controller
             // Bắt đầu transaction để đảm bảo dữ liệu nhất quán
             DB::beginTransaction();
             
-            // Tạo người dùng mới
+            // Tạo mã xác thực ngẫu nhiên
+            $verificationToken = Str::random(60);
+            
+            // Tạo người dùng mới với trạng thái 'unverified'
             $user = User::create([
                 'display_name' => $request->display_name,
                 'email' => $request->email,
                 'password_hash' => Hash::make($request->password),
                 'registration_type' => $request->registration_type,
-                'status' => 'active',
-                'avatar_url' => null
+                'status' => 'unverified',
+                'avatar_url' => null,
+                'verification_token' => $verificationToken
             ]);
 
-            // Trigger after_user_insert sẽ tự động tạo profile
-            // Chúng ta không cần tạo thủ công profile nữa
-
-            // Tạo token xác thực
-            $token = $user->createToken('auth_token')->plainTextToken;
+            // Gửi email xác thực
+            $this->sendVerificationEmail($user, $verificationToken);
             
             // Commit transaction nếu mọi thứ OK
             DB::commit();
 
-            // Lấy người dùng với profile để trả về
-            $user = User::with('profile')->find($user->user_id);
-
             return response()->json([
                 'status' => 'success',
-                'message' => 'Đăng ký tài khoản thành công',
+                'message' => 'Đăng ký tài khoản thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
                 'data' => [
-                    'user' => $user,
-                    'token' => $token
+                    'user_id' => $user->user_id,
+                    'email' => $user->email
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -79,6 +78,121 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Có lỗi xảy ra khi đăng ký tài khoản',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Gửi email xác thực tài khoản
+     */
+    private function sendVerificationEmail($user, $token)
+    {
+        try {
+            // Tạo URL xác thực
+            $verificationUrl = url("/api/auth/verify/{$user->user_id}/{$token}");
+            
+            // Chuẩn bị nội dung email
+            $subject = "Xác thực tài khoản NoteurGoals";
+            $message = "Xin chào {$user->display_name},\n\n";
+            $message .= "Cảm ơn bạn đã đăng ký tài khoản trên NoteurGoals. Vui lòng nhấp vào liên kết dưới đây để xác thực tài khoản của bạn:\n\n";
+            $message .= $verificationUrl . "\n\n";
+            $message .= "Nếu bạn không thực hiện thao tác này, vui lòng bỏ qua email này.\n\n";
+            $message .= "Trân trọng,\nĐội ngũ NoteurGoals";
+            
+            // Gửi email dạng text thay vì HTML
+            Mail::raw($message, function ($mail) use ($user, $subject) {
+                $mail->to($user->email)
+                    ->subject($subject);
+            });
+            
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Lỗi gửi email xác thực: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Xác thực email người dùng
+     */
+    public function verifyEmail($userId, $token)
+    {
+        // Tìm user theo ID và token
+        $user = User::where('user_id', $userId)
+            ->where('verification_token', $token)
+            ->where('status', 'unverified')
+            ->first();
+        
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Liên kết xác thực không hợp lệ hoặc đã hết hạn'
+            ], 400);
+        }
+        
+        // Cập nhật trạng thái và xóa token
+        $user->status = 'active';
+        $user->verification_token = null;
+        $user->save();
+        
+        // Tạo token đăng nhập tự động
+        $authToken = $user->createToken('auth_token')->plainTextToken;
+
+        // Chuyển hướng đến trang frontend với thông báo thành công
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+        $redirectUrl = "{$frontendUrl}/auth/verified?status=success&token={$authToken}&user_id={$user->user_id}";
+        
+        return redirect()->to($redirectUrl);
+    }
+
+    /**
+     * Gửi lại email xác thực
+     */
+    public function resendVerificationEmail(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|exists:Users,email'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Email không hợp lệ hoặc không tồn tại',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        $user = User::where('email', $request->email)
+            ->where('status', 'unverified')
+            ->first();
+        
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tài khoản không tồn tại hoặc đã được xác thực'
+            ], 400);
+        }
+        
+        try {
+            // Tạo token mới
+            $verificationToken = Str::random(60);
+            $user->verification_token = $verificationToken;
+            $user->save();
+            
+            // Gửi lại email
+            $this->sendVerificationEmail($user, $verificationToken);
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Lỗi gửi lại email xác thực: ' . $e->getMessage());
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Có lỗi xảy ra khi gửi lại email xác thực',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
@@ -112,6 +226,24 @@ class AuthController extends Controller
                     'status' => 'error',
                     'message' => 'Email hoặc mật khẩu không đúng'
                 ], 401);
+            }
+
+            // Kiểm tra trạng thái xác thực
+            if ($user->status === 'unverified') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tài khoản chưa được xác thực. Vui lòng kiểm tra email để xác thực tài khoản.',
+                    'verification_required' => true,
+                    'user_email' => $user->email
+                ], 403);
+            }
+
+            // Kiểm tra trạng thái tài khoản
+            if ($user->status === 'banned') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.'
+                ], 403);
             }
 
             // Cập nhật thời gian đăng nhập

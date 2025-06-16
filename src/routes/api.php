@@ -1,6 +1,4 @@
 <?php
-// filepath: c:\xampp\htdocs\NoteurGoals-Backend\src\routes\api.php
-
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
@@ -27,11 +25,6 @@ Route::prefix('auth')->group(function () {
     Route::post('/social-login-simple', [AuthController::class, 'simpleSocialLogin']);
 });
 
-// Route test
-Route::get('/hello', function () {
-    return ['message' => 'Xin chào từ API Laravel!'];
-});
-
 // Routes yêu cầu xác thực
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
@@ -44,3 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
 // Thêm routes cho callbacks trực tiếp không phụ thuộc session
 Route::get('/auth/google/callback-direct', [AuthController::class, 'handleGoogleCallbackDirect']);
 Route::get('/auth/facebook/callback-direct', [AuthController::class, 'handleFacebookCallbackDirect']);
+
+// Thêm các routes mới cho xác thực email
+Route::get('/auth/verify/{id}/{token}', [AuthController::class, 'verifyEmail']);
+Route::post('/auth/resend-verification', [AuthController::class, 'resendVerificationEmail']);
