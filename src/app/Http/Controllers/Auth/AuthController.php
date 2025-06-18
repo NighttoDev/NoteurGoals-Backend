@@ -13,191 +13,155 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Facades\Mail;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
     /**
      * Đăng ký người dùng mới với xác thực email
      */
-    public function register(Request $request)
+     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'display_name' => 'required|string|max:100',
-            'email' => 'required|string|email|max:100|unique:Users',
+            'email' => 'required|string|email|max:100|unique:Users,email',
             'password' => 'required|string|min:8|confirmed',
-            'registration_type' => 'required|in:email,google,facebook'
         ]);
 
+        // Trả về JSON lỗi tường minh nếu validation thất bại
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Dữ liệu không hợp lệ',
+                'message' => 'Dữ liệu không hợp lệ.',
                 'errors' => $validator->errors()
             ], 422);
         }
 
+        DB::beginTransaction();
         try {
-            // Bắt đầu transaction để đảm bảo dữ liệu nhất quán
-            DB::beginTransaction();
-            
-            // Tạo mã xác thực ngẫu nhiên
-            $verificationToken = Str::random(60);
-            
-            // Tạo người dùng mới với trạng thái 'unverified'
+            // Xóa các tài khoản chưa xác thực có cùng email để người dùng có thể thử lại
+            User::where('email', $request->email)
+                ->where('status', 'unverified')
+                ->delete();
+
+            // Tạo mã OTP
+            $otp = strval(random_int(100000, 999999));
+
+            // Tạo User mới với status 'unverified'
             $user = User::create([
                 'display_name' => $request->display_name,
                 'email' => $request->email,
                 'password_hash' => Hash::make($request->password),
-                'registration_type' => $request->registration_type,
+                'registration_type' => 'email', // Luôn là 'email' cho luồng này
                 'status' => 'unverified',
-                'avatar_url' => null,
-                'verification_token' => $verificationToken
+                'verification_token' => $otp,
             ]);
 
-            // Gửi email xác thực
-            $this->sendVerificationEmail($user, $verificationToken);
-            
-            // Commit transaction nếu mọi thứ OK
+            // Gửi email chứa mã OTP
+            $this->sendOtpEmail($user, $otp);
+
             DB::commit();
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Đăng ký tài khoản thành công. Vui lòng kiểm tra email để xác thực tài khoản.',
-                'data' => [
-                    'user_id' => $user->user_id,
-                    'email' => $user->email
-                ]
+                'message' => 'Mã xác thực đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư.',
+                'data' => ['email' => $user->email]
             ], 201);
-        } catch (\Exception $e) {
-            // Rollback transaction nếu có lỗi
-            DB::rollBack();
-            
-            // Ghi log lỗi
-            Log::error('Lỗi đăng ký: ' . $e->getMessage());
 
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Lỗi khi đăng ký (OTP Flow): ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi đăng ký tài khoản',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                'message' => 'Đã có lỗi xảy ra phía máy chủ, không thể hoàn tất đăng ký.'
             ], 500);
         }
     }
 
     /**
-     * Gửi email xác thực tài khoản
+     * [HOÀN CHỈNH] Xác thực email bằng OTP
      */
-    private function sendVerificationEmail($user, $token)
-    {
-        try {
-            // Tạo URL xác thực
-            $verificationUrl = url("/api/auth/verify/{$user->user_id}/{$token}");
-            
-            // Chuẩn bị nội dung email
-            $subject = "Xác thực tài khoản NoteurGoals";
-            $message = "Xin chào {$user->display_name},\n\n";
-            $message .= "Cảm ơn bạn đã đăng ký tài khoản trên NoteurGoals. Vui lòng nhấp vào liên kết dưới đây để xác thực tài khoản của bạn:\n\n";
-            $message .= $verificationUrl . "\n\n";
-            $message .= "Nếu bạn không thực hiện thao tác này, vui lòng bỏ qua email này.\n\n";
-            $message .= "Trân trọng,\nĐội ngũ NoteurGoals";
-            
-            // Gửi email dạng text thay vì HTML
-            Mail::raw($message, function ($mail) use ($user, $subject) {
-                $mail->to($user->email)
-                    ->subject($subject);
-            });
-            
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Lỗi gửi email xác thực: ' . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Xác thực email người dùng
-     */
-    public function verifyEmail($userId, $token)
-    {
-        // Tìm user theo ID và token
-        $user = User::where('user_id', $userId)
-            ->where('verification_token', $token)
-            ->where('status', 'unverified')
-            ->first();
-        
-        if (!$user) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Liên kết xác thực không hợp lệ hoặc đã hết hạn'
-            ], 400);
-        }
-        
-        // Cập nhật trạng thái và xóa token
-        $user->status = 'active';
-        $user->verification_token = null;
-        $user->save();
-        
-        // Tạo token đăng nhập tự động
-        $authToken = $user->createToken('auth_token')->plainTextToken;
-
-        // Chuyển hướng đến trang frontend với thông báo thành công
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-        $redirectUrl = "{$frontendUrl}/auth/verified?status=success&token={$authToken}&user_id={$user->user_id}";
-        
-        return redirect()->to($redirectUrl);
-    }
-
-    /**
-     * Gửi lại email xác thực
-     */
-    public function resendVerificationEmail(Request $request)
+    public function verifyEmail(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|exists:Users,email'
+            'email' => 'required|email|exists:Users,email',
+            'otp' => 'required|string|min:6|max:6',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Email không hợp lệ hoặc không tồn tại',
-                'errors' => $validator->errors()
-            ], 422);
+            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
         }
         
         $user = User::where('email', $request->email)
-            ->where('status', 'unverified')
-            ->first();
+                    ->where('status', 'unverified')
+                    ->first();
+
+        // Kiểm tra OTP có đúng không và có còn hiệu lực không (10 phút)
+        if (!$user || $user->verification_token !== $request->otp || Carbon::parse($user->created_at)->addMinutes(10)->isPast()) {
+            return response()->json(['status' => 'error', 'message' => 'Mã OTP không hợp lệ hoặc đã hết hạn.'], 400);
+        }
+
+        // Kích hoạt tài khoản thành công
+        $user->status = 'active';
+        $user->verification_token = null;
+        // $user->email_verified_at = now();
+        $user->save();
+
+        // Tạo token đăng nhập tự động
+        $token = $user->createToken('auth_token')->plainTextToken;
+        $user->load('profile'); // Load thêm thông tin profile nếu cần
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Tài khoản đã được xác thực thành công!',
+            'data' => ['token' => $token, 'user' => $user]
+        ]);
+    }
+
+    /**
+     * [HOÀN CHỈNH] Gửi lại email xác thực
+     */
+    public function resendVerificationEmail(Request $request)
+    {
+        $validator = Validator::make($request->all(), [ 'email' => 'required|email|exists:Users,email' ]);
+        if ($validator->fails()) { return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422); }
         
+        $user = User::where('email', $request->email)->where('status', 'unverified')->first();
         if (!$user) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Tài khoản không tồn tại hoặc đã được xác thực'
-            ], 400);
+            return response()->json(['status' => 'error', 'message' => 'Tài khoản này không tồn tại hoặc đã được xác thực.'], 400);
         }
         
         try {
-            // Tạo token mới
-            $verificationToken = Str::random(60);
-            $user->verification_token = $verificationToken;
+            $otp = strval(random_int(100000, 999999));
+            $user->verification_token = $otp;
+            $user->created_at = now(); // Reset lại thời gian để tính giờ hết hạn OTP mới
             $user->save();
             
-            // Gửi lại email
-            $this->sendVerificationEmail($user, $verificationToken);
-            
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Email xác thực đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn.'
-            ]);
+            $this->sendOtpEmail($user, $otp);
+
+            return response()->json(['status' => 'success', 'message' => 'Một mã xác thực mới đã được gửi đến email của bạn.']);
         } catch (\Exception $e) {
-            Log::error('Lỗi gửi lại email xác thực: ' . $e->getMessage());
-            
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi gửi lại email xác thực',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+            Log::error('Lỗi gửi lại email OTP: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra khi gửi lại email.'], 500);
         }
     }
 
+    /**
+     * Hàm trợ giúp gửi email OTP
+     */
+    private function sendOtpEmail(User $user, string $otp)
+    {
+        $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
+        $message = "Xin chào {$user->display_name},\n\n"
+                 . "Cảm ơn bạn đã đăng ký. Mã xác thực của bạn là: {$otp}\n\n"
+                 . "Mã này sẽ hết hạn trong vòng 10 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n"
+                 . "Trân trọng,\n"
+                 . "Đội ngũ NoteurGoals";
+        
+        Mail::raw($message, function ($mail) use ($user, $subject) {
+            $mail->to($user->email)->subject($subject);
+        });
+    }
     /**
      * Đăng nhập người dùng
      */
@@ -418,530 +382,530 @@ class AuthController extends Controller
     /**
      * Tạo URL xác thực Google và trả về cho frontend
      */
-public function getGoogleAuthUrl()
-{
-    try {
-        // Kiểm tra xem có thể tạo instance Socialite không
-        if (!class_exists('Laravel\Socialite\Facades\Socialite')) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Laravel Socialite chưa được cài đặt'
-            ], 500);
-        }
+// public function getGoogleAuthUrl()
+// {
+//     try {
+//         // Kiểm tra xem có thể tạo instance Socialite không
+//         if (!class_exists('Laravel\Socialite\Facades\Socialite')) {
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Laravel Socialite chưa được cài đặt'
+//             ], 500);
+//         }
 
-        // Debug thông tin cấu hình
-        $clientId = config('services.google.client_id');
-        $clientSecret = config('services.google.client_secret');
-        $redirectUri = config('services.google.redirect');
+//         // Debug thông tin cấu hình
+//         $clientId = config('services.google.client_id');
+//         $clientSecret = config('services.google.client_secret');
+//         $redirectUri = config('services.google.redirect');
         
-        if (!$clientId || !$clientSecret || !$redirectUri) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Thiếu cấu hình OAuth',
-                'debug_info' => [
-                    'client_id_exists' => !empty($clientId),
-                    'client_secret_exists' => !empty($clientSecret),
-                    'redirect_uri_exists' => !empty($redirectUri)
-                ]
-            ], 500);
-        }
+//         if (!$clientId || !$clientSecret || !$redirectUri) {
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Thiếu cấu hình OAuth',
+//                 'debug_info' => [
+//                     'client_id_exists' => !empty($clientId),
+//                     'client_secret_exists' => !empty($clientSecret),
+//                     'redirect_uri_exists' => !empty($redirectUri)
+//                 ]
+//             ], 500);
+//         }
 
-        // Thử tạo URL trực tiếp thay vì dùng facade
-        $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
-            'client_id' => $clientId,
-            'redirect_uri' => $redirectUri,
-            'response_type' => 'code',
-            'scope' => 'email profile',
-            'access_type' => 'online'
-        ]);
+//         // Thử tạo URL trực tiếp thay vì dùng facade
+//         $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+//             'client_id' => $clientId,
+//             'redirect_uri' => $redirectUri,
+//             'response_type' => 'code',
+//             'scope' => 'email profile',
+//             'access_type' => 'online'
+//         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'url' => $url
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Không thể tạo URL xác thực Google',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
+//         return response()->json([
+//             'status' => 'success',
+//             'url' => $url
+//         ]);
+//     } catch (\Exception $e) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Không thể tạo URL xác thực Google',
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// }
 
-public function getFacebookAuthUrl()
-{
-    try {
-        $clientId = config('services.facebook.client_id');
-        $redirectUri = config('services.facebook.redirect');
+// public function getFacebookAuthUrl()
+// {
+//     try {
+//         $clientId = config('services.facebook.client_id');
+//         $redirectUri = config('services.facebook.redirect');
         
-        // Thay đổi từ v13.0 thành v18.0 (phiên bản mới nhất hiện tại)
-        $url = 'https://www.facebook.com/v18.0/dialog/oauth?' . http_build_query([
-            'client_id' => $clientId,
-            'redirect_uri' => $redirectUri,
-            'response_type' => 'code',
-            'scope' => 'email,public_profile'  // Thêm public_profile
-        ]);
+//         // Thay đổi từ v13.0 thành v18.0 (phiên bản mới nhất hiện tại)
+//         $url = 'https://www.facebook.com/v18.0/dialog/oauth?' . http_build_query([
+//             'client_id' => $clientId,
+//             'redirect_uri' => $redirectUri,
+//             'response_type' => 'code',
+//             'scope' => 'email,public_profile'  // Thêm public_profile
+//         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'url' => $url
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Không thể tạo URL xác thực Facebook',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-}
+//         return response()->json([
+//             'status' => 'success',
+//             'url' => $url
+//         ]);
+//     } catch (\Exception $e) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Không thể tạo URL xác thực Facebook',
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// }
 
-    /**
-     * Xử lý callback từ Google
-     */
-    public function handleGoogleCallback(Request $request)
-    {
-        try {
-            // Kiểm tra lỗi từ Google
-            if ($request->has('error')) {
-                Log::error('Google auth error: ' . $request->error_description);
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Google auth error: ' . $request->error_description
-                ], 400);
-            }
+//     /**
+//      * Xử lý callback từ Google
+//      */
+//     public function handleGoogleCallback(Request $request)
+//     {
+//         try {
+//             // Kiểm tra lỗi từ Google
+//             if ($request->has('error')) {
+//                 Log::error('Google auth error: ' . $request->error_description);
+//                 return response()->json([
+//                     'status' => 'error',
+//                     'message' => 'Google auth error: ' . $request->error_description
+//                 ], 400);
+//             }
 
-            // Ghi log thông tin request để debug
-            Log::info('Google callback received', ['code' => $request->has('code'), 'state' => $request->has('state')]);
+//             // Ghi log thông tin request để debug
+//             Log::info('Google callback received', ['code' => $request->has('code'), 'state' => $request->has('state')]);
 
-            // Thử lấy thông tin người dùng từ Google với debug chi tiết
-            try {
-                $googleUser = Socialite::driver('google')->user();
-                Log::info('Google user retrieved', [
-                    'id' => $googleUser->getId(),
-                    'email' => $googleUser->getEmail(),
-                    'name' => $googleUser->getName()
-                ]);
-            } catch (\Exception $e) {
-                Log::error('Failed to get Google user: ' . $e->getMessage());
-                throw $e;
-            }
+//             // Thử lấy thông tin người dùng từ Google với debug chi tiết
+//             try {
+//                 $googleUser = Socialite::driver('google')->user();
+//                 Log::info('Google user retrieved', [
+//                     'id' => $googleUser->getId(),
+//                     'email' => $googleUser->getEmail(),
+//                     'name' => $googleUser->getName()
+//                 ]);
+//             } catch (\Exception $e) {
+//                 Log::error('Failed to get Google user: ' . $e->getMessage());
+//                 throw $e;
+//             }
             
-            // Tìm hoặc tạo user
-            $user = $this->findOrCreateUser($googleUser, 'google');
+//             // Tìm hoặc tạo user
+//             $user = $this->findOrCreateUser($googleUser, 'google');
             
-            // Tạo token authentication
-            $token = $user->createToken('auth_token')->plainTextToken;
+//             // Tạo token authentication
+//             $token = $user->createToken('auth_token')->plainTextToken;
             
-            // Cập nhật login time
-            $user->last_login_at = now();
-            $user->save();
+//             // Cập nhật login time
+//             $user->last_login_at = now();
+//             $user->save();
             
-            // Load user profile
-            $user->load('profile');
+//             // Load user profile
+//             $user->load('profile');
             
-            // Redirect to frontend
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
-            Log::info('Redirecting to: ' . $redirectUrl);
+//             // Redirect to frontend
+//             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+//             $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
+//             Log::info('Redirecting to: ' . $redirectUrl);
             
-            return redirect()->to($redirectUrl);
-        } catch (\Exception $e) {
-            Log::error('Google callback error: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
+//             return redirect()->to($redirectUrl);
+//         } catch (\Exception $e) {
+//             Log::error('Google callback error: ' . $e->getMessage());
+//             Log::error('Stack trace: ' . $e->getTraceAsString());
             
-            // Chuyển hướng về frontend với chi tiết lỗi để debug
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $message = urlencode('Lỗi: ' . $e->getMessage());
-            $redirectUrl = "{$frontendUrl}/auth/social-callback?error=1&message={$message}";
+//             // Chuyển hướng về frontend với chi tiết lỗi để debug
+//             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+//             $message = urlencode('Lỗi: ' . $e->getMessage());
+//             $redirectUrl = "{$frontendUrl}/auth/social-callback?error=1&message={$message}";
             
-            return redirect()->to($redirectUrl);
-        }
-    }
+//             return redirect()->to($redirectUrl);
+//         }
+//     }
 
-    /**
-     * Xử lý callback từ Facebook
-     */
-    public function handleFacebookCallback(Request $request)
-    {
-        try {
-            // Nếu có lỗi từ Facebook
-            if ($request->has('error')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Đăng nhập Facebook thất bại: ' . $request->error_description
-                ], 400);
-            }
+//     /**
+//      * Xử lý callback từ Facebook
+//      */
+//     public function handleFacebookCallback(Request $request)
+//     {
+//         try {
+//             // Nếu có lỗi từ Facebook
+//             if ($request->has('error')) {
+//                 return response()->json([
+//                     'status' => 'error',
+//                     'message' => 'Đăng nhập Facebook thất bại: ' . $request->error_description
+//                 ], 400);
+//             }
 
-            // Lấy thông tin người dùng từ Facebook
-            $facebookUser = Socialite::driver('facebook')
-                ->user();
+//             // Lấy thông tin người dùng từ Facebook
+//             $facebookUser = Socialite::driver('facebook')
+//                 ->user();
             
-            // Tìm người dùng theo email hoặc tạo mới
-            $user = $this->findOrCreateUser($facebookUser, 'facebook');
+//             // Tìm người dùng theo email hoặc tạo mới
+//             $user = $this->findOrCreateUser($facebookUser, 'facebook');
             
-            // Tạo token và trả về
-            $token = $user->createToken('auth_token')->plainTextToken;
+//             // Tạo token và trả về
+//             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // Cập nhật thông tin đăng nhập
-            $user->last_login_at = now();
-            $user->save();
+//             // Cập nhật thông tin đăng nhập
+//             $user->last_login_at = now();
+//             $user->save();
 
-            // Lấy thông tin user kèm profile
-            $user->load('profile');
+//             // Lấy thông tin user kèm profile
+//             $user->load('profile');
 
-            // Redirect URL cho frontend với token và user id
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
+//             // Redirect URL cho frontend với token và user id
+//             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+//             $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
 
-            return redirect()->to($redirectUrl);
-        } catch (\Exception $e) {
-            Log::error('Lỗi xử lý callback Facebook: ' . $e->getMessage());
+//             return redirect()->to($redirectUrl);
+//         } catch (\Exception $e) {
+//             Log::error('Lỗi xử lý callback Facebook: ' . $e->getMessage());
             
-            // Redirect về frontend với thông báo lỗi
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = "{$frontendUrl}/auth/social-callback?error=1&message=" . urlencode('Đăng nhập không thành công');
+//             // Redirect về frontend với thông báo lỗi
+//             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+//             $redirectUrl = "{$frontendUrl}/auth/social-callback?error=1&message=" . urlencode('Đăng nhập không thành công');
             
-            return redirect()->to($redirectUrl);
-        }
-    }
+//             return redirect()->to($redirectUrl);
+//         }
+//     }
 
-    /**
-     * Xử lý đăng nhập xã hội trực tiếp từ token (cho mobile)
-     */
-    /**
-     * Xử lý đăng nhập xã hội trực tiếp từ token (cho mobile)
-     */
-public function socialLogin(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'provider' => 'required|string|in:google,facebook',
-        'token' => 'required|string',
-    ]);
+//     /**
+//      * Xử lý đăng nhập xã hội trực tiếp từ token (cho mobile)
+//      */
+//     /**
+//      * Xử lý đăng nhập xã hội trực tiếp từ token (cho mobile)
+//      */
+// public function socialLogin(Request $request)
+// {
+//     $validator = Validator::make($request->all(), [
+//         'provider' => 'required|string|in:google,facebook',
+//         'token' => 'required|string',
+//     ]);
 
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Dữ liệu không hợp lệ',
-            'errors' => $validator->errors()
-        ], 422);
-    }
+//     if ($validator->fails()) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Dữ liệu không hợp lệ',
+//             'errors' => $validator->errors()
+//         ], 422);
+//     }
 
-    try {
-        $provider = $request->provider;
-        $token = $request->token;
-        $socialUser = null;
+//     try {
+//         $provider = $request->provider;
+//         $token = $request->token;
+//         $socialUser = null;
         
-        // Xử lý theo từng provider
-        if ($provider === 'google') {
-            // Gọi trực tiếp API Google thay vì dùng Socialite
-            $response = Http::get('https://www.googleapis.com/oauth2/v3/userinfo', [
-                'access_token' => $token
-            ]);
+//         // Xử lý theo từng provider
+//         if ($provider === 'google') {
+//             // Gọi trực tiếp API Google thay vì dùng Socialite
+//             $response = Http::get('https://www.googleapis.com/oauth2/v3/userinfo', [
+//                 'access_token' => $token
+//             ]);
             
-            if ($response->successful()) {
-                $data = $response->json();
+//             if ($response->successful()) {
+//                 $data = $response->json();
                 
-                // Tạo đối tượng user tự định nghĩa
-                $socialUser = (object) [
-                    'id' => $data['sub'] ?? null,
-                    'email' => $data['email'] ?? null,
-                    'name' => $data['name'] ?? null,
-                    'avatar' => $data['picture'] ?? null,
-                ];
-            } else {
-                // Thử với cách xác thực ID token
-                try {
-                    // Cần cài gói này: composer require google/apiclient
-                    $client = new \Google_Client(['client_id' => config('services.google.client_id')]);
-                    $payload = $client->verifyIdToken($token);
+//                 // Tạo đối tượng user tự định nghĩa
+//                 $socialUser = (object) [
+//                     'id' => $data['sub'] ?? null,
+//                     'email' => $data['email'] ?? null,
+//                     'name' => $data['name'] ?? null,
+//                     'avatar' => $data['picture'] ?? null,
+//                 ];
+//             } else {
+//                 // Thử với cách xác thực ID token
+//                 try {
+//                     // Cần cài gói này: composer require google/apiclient
+//                     $client = new \Google_Client(['client_id' => config('services.google.client_id')]);
+//                     $payload = $client->verifyIdToken($token);
                     
-                    if ($payload) {
-                        $socialUser = (object) [
-                            'id' => $payload['sub'] ?? null,
-                            'email' => $payload['email'] ?? null,
-                            'name' => $payload['name'] ?? null,
-                            'avatar' => $payload['picture'] ?? null,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Google ID token verification failed: ' . $e->getMessage());
-                }
-            }
-        } elseif ($provider === 'facebook') {
-            // Gọi trực tiếp API Facebook
-            $response = Http::get('https://graph.facebook.com/v13.0/me', [
-                'fields' => 'id,name,email,picture.width(200)',
-                'access_token' => $token
-            ]);
+//                     if ($payload) {
+//                         $socialUser = (object) [
+//                             'id' => $payload['sub'] ?? null,
+//                             'email' => $payload['email'] ?? null,
+//                             'name' => $payload['name'] ?? null,
+//                             'avatar' => $payload['picture'] ?? null,
+//                         ];
+//                     }
+//                 } catch (\Exception $e) {
+//                     Log::error('Google ID token verification failed: ' . $e->getMessage());
+//                 }
+//             }
+//         } elseif ($provider === 'facebook') {
+//             // Gọi trực tiếp API Facebook
+//             $response = Http::get('https://graph.facebook.com/v13.0/me', [
+//                 'fields' => 'id,name,email,picture.width(200)',
+//                 'access_token' => $token
+//             ]);
             
-            if ($response->successful()) {
-                $data = $response->json();
+//             if ($response->successful()) {
+//                 $data = $response->json();
                 
-                // Tạo đối tượng user tự định nghĩa
-                $socialUser = (object) [
-                    'id' => $data['id'] ?? null,
-                    'email' => $data['email'] ?? null,
-                    'name' => $data['name'] ?? null,
-                    'avatar' => isset($data['picture']['data']['url']) ? $data['picture']['data']['url'] : null,
-                ];
-            }
-        }
+//                 // Tạo đối tượng user tự định nghĩa
+//                 $socialUser = (object) [
+//                     'id' => $data['id'] ?? null,
+//                     'email' => $data['email'] ?? null,
+//                     'name' => $data['name'] ?? null,
+//                     'avatar' => isset($data['picture']['data']['url']) ? $data['picture']['data']['url'] : null,
+//                 ];
+//             }
+//         }
 
-        // Kiểm tra xem có lấy được thông tin người dùng không
-        if (!$socialUser || empty($socialUser->email)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Không thể lấy thông tin từ token hoặc thiếu email',
-                'data' => $socialUser // Trả về để debug
-            ], 401);
-        }
+//         // Kiểm tra xem có lấy được thông tin người dùng không
+//         if (!$socialUser || empty($socialUser->email)) {
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Không thể lấy thông tin từ token hoặc thiếu email',
+//                 'data' => $socialUser // Trả về để debug
+//             ], 401);
+//         }
 
-        // Thêm các phương thức getter để tương thích với code hiện tại
-        $socialUser->getEmail = function() use ($socialUser) {
-            return $socialUser->email;
-        };
-        $socialUser->getName = function() use ($socialUser) {
-            return $socialUser->name;
-        };
-        $socialUser->getAvatar = function() use ($socialUser) {
-            return $socialUser->avatar;
-        };
+//         // Thêm các phương thức getter để tương thích với code hiện tại
+//         $socialUser->getEmail = function() use ($socialUser) {
+//             return $socialUser->email;
+//         };
+//         $socialUser->getName = function() use ($socialUser) {
+//             return $socialUser->name;
+//         };
+//         $socialUser->getAvatar = function() use ($socialUser) {
+//             return $socialUser->avatar;
+//         };
 
-        // Tìm hoặc tạo người dùng
-        $user = $this->findOrCreateUser($socialUser, $provider);
+//         // Tìm hoặc tạo người dùng
+//         $user = $this->findOrCreateUser($socialUser, $provider);
         
-        // Tạo token xác thực
-        $authToken = $user->createToken('auth_token')->plainTextToken;
+//         // Tạo token xác thực
+//         $authToken = $user->createToken('auth_token')->plainTextToken;
 
-        // Cập nhật thông tin đăng nhập
-        $user->last_login_at = now();
-        $user->save();
+//         // Cập nhật thông tin đăng nhập
+//         $user->last_login_at = now();
+//         $user->save();
 
-        // Lấy thông tin user kèm profile
-        $user->load('profile');
+//         // Lấy thông tin user kèm profile
+//         $user->load('profile');
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Đăng nhập thành công',
-            'data' => [
-                'user' => $user,
-                'token' => $authToken
-            ]
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Lỗi đăng nhập xã hội: ' . $e->getMessage());
+//         return response()->json([
+//             'status' => 'success',
+//             'message' => 'Đăng nhập thành công',
+//             'data' => [
+//                 'user' => $user,
+//                 'token' => $authToken
+//             ]
+//         ]);
+//     } catch (\Exception $e) {
+//         Log::error('Lỗi đăng nhập xã hội: ' . $e->getMessage());
         
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Có lỗi xảy ra khi đăng nhập',
-            'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-        ], 500);
-    }
-}
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Có lỗi xảy ra khi đăng nhập',
+//             'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+//         ], 500);
+//     }
+// }
 
-    /**
-     * Xử lý đăng nhập với ID token từ Google (đặc biệt hữu ích cho mobile)
-     */
-    public function googleIdTokenLogin(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'id_token' => 'required|string',
-        ]);
+//     /**
+//      * Xử lý đăng nhập với ID token từ Google (đặc biệt hữu ích cho mobile)
+//      */
+//     public function googleIdTokenLogin(Request $request)
+//     {
+//         $validator = Validator::make($request->all(), [
+//             'id_token' => 'required|string',
+//         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error', 
-                'message' => 'ID token không hợp lệ'
-            ], 422);
-        }
+//         if ($validator->fails()) {
+//             return response()->json([
+//                 'status' => 'error', 
+//                 'message' => 'ID token không hợp lệ'
+//             ], 422);
+//         }
 
-        try {
-            $client = new \Google_Client(['client_id' => config('services.google.client_id')]);
-            $payload = $client->verifyIdToken($request->id_token);
+//         try {
+//             $client = new \Google_Client(['client_id' => config('services.google.client_id')]);
+//             $payload = $client->verifyIdToken($request->id_token);
             
-            if (!$payload) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'ID token không hợp lệ hoặc đã hết hạn'
-                ], 401);
-            }
+//             if (!$payload) {
+//                 return response()->json([
+//                     'status' => 'error',
+//                     'message' => 'ID token không hợp lệ hoặc đã hết hạn'
+//                 ], 401);
+//             }
             
-            // Tạo đối tượng user từ payload
-            $socialUser = new \stdClass();
-            $socialUser->id = $payload['sub'];
-            $socialUser->name = $payload['name'] ?? '';
-            $socialUser->email = $payload['email'] ?? '';
-            $socialUser->avatar = $payload['picture'] ?? null;
+//             // Tạo đối tượng user từ payload
+//             $socialUser = new \stdClass();
+//             $socialUser->id = $payload['sub'];
+//             $socialUser->name = $payload['name'] ?? '';
+//             $socialUser->email = $payload['email'] ?? '';
+//             $socialUser->avatar = $payload['picture'] ?? null;
             
-            // Thêm các phương thức getter để tương thích với interface của Socialite
-            $socialUser->getEmail = function() use ($socialUser) {
-                return $socialUser->email;
-            };
-            $socialUser->getName = function() use ($socialUser) {
-                return $socialUser->name;
-            };
-            $socialUser->getAvatar = function() use ($socialUser) {
-                return $socialUser->avatar;
-            };
+//             // Thêm các phương thức getter để tương thích với interface của Socialite
+//             $socialUser->getEmail = function() use ($socialUser) {
+//                 return $socialUser->email;
+//             };
+//             $socialUser->getName = function() use ($socialUser) {
+//                 return $socialUser->name;
+//             };
+//             $socialUser->getAvatar = function() use ($socialUser) {
+//                 return $socialUser->avatar;
+//             };
             
-            // Tìm hoặc tạo user
-            $user = $this->findOrCreateUser($socialUser, 'google');
+//             // Tìm hoặc tạo user
+//             $user = $this->findOrCreateUser($socialUser, 'google');
             
-            // Tạo token xác thực
-            $authToken = $user->createToken('auth_token')->plainTextToken;
+//             // Tạo token xác thực
+//             $authToken = $user->createToken('auth_token')->plainTextToken;
             
-            // Cập nhật thông tin đăng nhập
-            $user->last_login_at = now();
-            $user->save();
+//             // Cập nhật thông tin đăng nhập
+//             $user->last_login_at = now();
+//             $user->save();
             
-            // Lấy thông tin user kèm profile
-            $user->load('profile');
+//             // Lấy thông tin user kèm profile
+//             $user->load('profile');
             
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Đăng nhập thành công',
-                'data' => [
-                    'user' => $user,
-                    'token' => $authToken
-                ]
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Lỗi đăng nhập với Google ID token: ' . $e->getMessage());
+//             return response()->json([
+//                 'status' => 'success',
+//                 'message' => 'Đăng nhập thành công',
+//                 'data' => [
+//                     'user' => $user,
+//                     'token' => $authToken
+//                 ]
+//             ]);
+//         } catch (\Exception $e) {
+//             Log::error('Lỗi đăng nhập với Google ID token: ' . $e->getMessage());
             
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi đăng nhập',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
-        }
-    }
+//             return response()->json([
+//                 'status' => 'error',
+//                 'message' => 'Có lỗi xảy ra khi đăng nhập',
+//                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+//             ], 500);
+//         }
+//     }
 
-    /**
-     * Tìm người dùng theo email hoặc tạo mới
-     */
-    private function findOrCreateUser($socialUser, $provider)
-    {
-        // Bắt đầu transaction
-        DB::beginTransaction();
+//     /**
+//      * Tìm người dùng theo email hoặc tạo mới
+//      */
+//     private function findOrCreateUser($socialUser, $provider)
+//     {
+//         // Bắt đầu transaction
+//         DB::beginTransaction();
         
-        try {
-            // Đảm bảo có email
-            $email = $socialUser->getEmail() ?? ($socialUser->email ?? null);
+//         try {
+//             // Đảm bảo có email
+//             $email = $socialUser->getEmail() ?? ($socialUser->email ?? null);
             
-            if (!$email) {
-                throw new \Exception('Không thể lấy email từ tài khoản xã hội');
-            }
+//             if (!$email) {
+//                 throw new \Exception('Không thể lấy email từ tài khoản xã hội');
+//             }
             
-            // Tìm user theo email
-            $user = User::where('email', $email)->first();
+//             // Tìm user theo email
+//             $user = User::where('email', $email)->first();
             
-            if (!$user) {
-                // Lấy tên hiển thị
-                $displayName = $socialUser->getName() ?? ($socialUser->name ?? 'User');
+//             if (!$user) {
+//                 // Lấy tên hiển thị
+//                 $displayName = $socialUser->getName() ?? ($socialUser->name ?? 'User');
                 
-                // Lấy avatar URL
-                $avatarUrl = null;
-                if (method_exists($socialUser, 'getAvatar')) {
-                    $avatarUrl = $socialUser->getAvatar();
-                } elseif (isset($socialUser->avatar)) {
-                    $avatarUrl = $socialUser->avatar;
-                }
+//                 // Lấy avatar URL
+//                 $avatarUrl = null;
+//                 if (method_exists($socialUser, 'getAvatar')) {
+//                     $avatarUrl = $socialUser->getAvatar();
+//                 } elseif (isset($socialUser->avatar)) {
+//                     $avatarUrl = $socialUser->avatar;
+//                 }
                 
-                // Tạo user mới nếu chưa tồn tại
-                $user = User::create([
-                    'display_name' => $displayName,
-                    'email' => $email,
-                    'password_hash' => Hash::make(Str::random(16)), // Mật khẩu ngẫu nhiên
-                    'avatar_url' => $avatarUrl,
-                    'registration_type' => $provider,
-                    'status' => 'active'
-                ]);
-            } else {
-                // Cập nhật thông tin nếu đăng nhập với provider khác
-                if ($user->registration_type !== $provider) {
-                    // Ghi log về việc user đăng nhập với provider khác
-                    Log::info("User {$user->email} đăng nhập với provider {$provider} khác với provider đăng ký ban đầu {$user->registration_type}");
-                }
+//                 // Tạo user mới nếu chưa tồn tại
+//                 $user = User::create([
+//                     'display_name' => $displayName,
+//                     'email' => $email,
+//                     'password_hash' => Hash::make(Str::random(16)), // Mật khẩu ngẫu nhiên
+//                     'avatar_url' => $avatarUrl,
+//                     'registration_type' => $provider,
+//                     'status' => 'active'
+//                 ]);
+//             } else {
+//                 // Cập nhật thông tin nếu đăng nhập với provider khác
+//                 if ($user->registration_type !== $provider) {
+//                     // Ghi log về việc user đăng nhập với provider khác
+//                     Log::info("User {$user->email} đăng nhập với provider {$provider} khác với provider đăng ký ban đầu {$user->registration_type}");
+//                 }
                 
-                // Cập nhật avatar nếu chưa có
-                if (!$user->avatar_url && (method_exists($socialUser, 'getAvatar') || isset($socialUser->avatar))) {
-                    $user->avatar_url = method_exists($socialUser, 'getAvatar') ? $socialUser->getAvatar() : $socialUser->avatar;
-                    $user->save();
-                }
-            }
+//                 // Cập nhật avatar nếu chưa có
+//                 if (!$user->avatar_url && (method_exists($socialUser, 'getAvatar') || isset($socialUser->avatar))) {
+//                     $user->avatar_url = method_exists($socialUser, 'getAvatar') ? $socialUser->getAvatar() : $socialUser->avatar;
+//                     $user->save();
+//                 }
+//             }
             
-            // Commit transaction
-            DB::commit();
+//             // Commit transaction
+//             DB::commit();
             
-            return $user;
-        } catch (\Exception $e) {
-            // Rollback nếu có lỗi
-            DB::rollBack();
-            throw $e;
-        }
-    }
+//             return $user;
+//         } catch (\Exception $e) {
+//             // Rollback nếu có lỗi
+//             DB::rollBack();
+//             throw $e;
+//         }
+//     }
 
-    public function simpleSocialLogin(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'email' => 'required|email',
-        'name' => 'required|string',
-        'provider' => 'required|string|in:google,facebook',
-        'avatar_url' => 'nullable|string',
-    ]);
+//     public function simpleSocialLogin(Request $request)
+// {
+//     $validator = Validator::make($request->all(), [
+//         'email' => 'required|email',
+//         'name' => 'required|string',
+//         'provider' => 'required|string|in:google,facebook',
+//         'avatar_url' => 'nullable|string',
+//     ]);
 
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Dữ liệu không hợp lệ',
-            'errors' => $validator->errors()
-        ], 422);
-    }
+//     if ($validator->fails()) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Dữ liệu không hợp lệ',
+//             'errors' => $validator->errors()
+//         ], 422);
+//     }
 
-    try {
-        // Tìm user theo email
-        $user = User::where('email', $request->email)->first();
+//     try {
+//         // Tìm user theo email
+//         $user = User::where('email', $request->email)->first();
         
-        // Nếu không tìm thấy, tạo mới
-        if (!$user) {
-            $user = User::create([
-                'display_name' => $request->name,
-                'email' => $request->email,
-                'password_hash' => Hash::make(Str::random(16)),
-                'avatar_url' => $request->avatar_url,
-                'registration_type' => $request->provider,
-                'status' => 'active'
-            ]);
-        }
+//         // Nếu không tìm thấy, tạo mới
+//         if (!$user) {
+//             $user = User::create([
+//                 'display_name' => $request->name,
+//                 'email' => $request->email,
+//                 'password_hash' => Hash::make(Str::random(16)),
+//                 'avatar_url' => $request->avatar_url,
+//                 'registration_type' => $request->provider,
+//                 'status' => 'active'
+//             ]);
+//         }
         
-        // Tạo token xác thực
-        $token = $user->createToken('auth_token')->plainTextToken;
+//         // Tạo token xác thực
+//         $token = $user->createToken('auth_token')->plainTextToken;
         
-        // Cập nhật thời gian đăng nhập
-        $user->last_login_at = now();
-        $user->save();
+//         // Cập nhật thời gian đăng nhập
+//         $user->last_login_at = now();
+//         $user->save();
         
-        // Lấy profile của user
-        $user->load('profile');
+//         // Lấy profile của user
+//         $user->load('profile');
         
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Đăng nhập thành công',
-            'data' => [
-                'user' => $user,
-                'token' => $token
-            ]
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Lỗi đăng nhập xã hội đơn giản: ' . $e->getMessage());
+//         return response()->json([
+//             'status' => 'success',
+//             'message' => 'Đăng nhập thành công',
+//             'data' => [
+//                 'user' => $user,
+//                 'token' => $token
+//             ]
+//         ]);
+//     } catch (\Exception $e) {
+//         Log::error('Lỗi đăng nhập xã hội đơn giản: ' . $e->getMessage());
         
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Có lỗi xảy ra khi đăng nhập',
-            'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-        ], 500);
-    }
-}
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Có lỗi xảy ra khi đăng nhập',
+//             'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+//         ], 500);
+//     }
+// }
 
 /**
  * Xử lý callback từ Google trực tiếp không qua Socialite
