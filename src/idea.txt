@@ -29,11 +29,7 @@ o Hiệu suất cao, bảo mật tốt, khả năng mở rộng và dễ bảo t
 • Wireframe/UI design: Dùng Figma hoặc Adobe XD để tạo giao diện mẫu.
 2. Lựa chọn công nghệ
 2.1 Frontend
-• Công nghệ: Nuxt.js
-• Lý do chọn:
-o Nuxt.js cung cấp server-side rendering (SSR) và static site generation (SSG), giúp cải thiện tốc độ tải trang và SEO.
-o Dựa trên Vue.js, giúp phát triển nhanh chóng và nhất quán.
-o Hỗ trợ tốt cho việc xây dựng ứng dụng có hiệu suất cao và khả năng mở rộng.
+• Công nghệ: React.js
 2.2 Backend
 • Công nghệ: Laravel
 • Lý do chọn:
