@@ -115,11 +115,6 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class, 'user_id', 'user_id');
     }
 
-    public function aiSuggestions()
-    {
-        return $this->hasMany(AISuggestion::class, 'user_id', 'user_id');
-    }
-
     public function admin()
     {
         return $this->hasOne(Admin::class, 'user_id', 'user_id');

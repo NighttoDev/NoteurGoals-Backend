@@ -2,14 +2,14 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function Events({ auth, events, filters = {} }) {
+export default function Events({ auth, events = {data: []}, filters = {} }) {
     const [search, setSearch] = useState(filters.search || '');
 
     const handleSearch = (e) => {
         e.preventDefault();
         router.get(route('admin.events'), { search }, {
             preserveState: true,
-            preserveScroll: true,
+            replace: true
         });
     };
 
@@ -17,195 +17,186 @@ export default function Events({ auth, events, filters = {} }) {
         setSearch('');
         router.get(route('admin.events'), {}, {
             preserveState: true,
-            preserveScroll: true,
+            replace: true
         });
     };
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('vi-VN', {
+    const getEventStatus = (eventTime) => {
+        if (!eventTime) return { status: 'unknown', color: 'bg-gray-100 text-gray-800' };
+        
+        const now = new Date();
+        const eventDate = new Date(eventTime);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+        
+        if (eventDateOnly < today) {
+            return { status: 'Past', color: 'bg-gray-100 text-gray-800' };
+        } else if (eventDateOnly.getTime() === today.getTime()) {
+            return { status: 'Today', color: 'bg-blue-100 text-blue-800' };
+        } else {
+            return { status: 'Upcoming', color: 'bg-green-100 text-green-800' };
+        }
+    };
+
+    const formatEventTime = (eventTime) => {
+        if (!eventTime) return 'No time set';
+        
+        const date = new Date(eventTime);
+        return date.toLocaleDateString('vi-VN', {
+            weekday: 'short',
             year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
+            month: 'short',
+            day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
         });
     };
 
-    const formatEventTime = (dateString) => {
-        return new Date(dateString).toLocaleDateString('vi-VN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            weekday: 'short'
-        });
-    };
-
-    const truncateText = (text, maxLength = 80) => {
-        if (!text) return '';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-    };
-
-    const getEventStatus = (eventTime) => {
-        const now = new Date();
-        const eventDate = new Date(eventTime);
-        
-        if (eventDate < now) {
-            return { label: 'Past', color: 'bg-gray-100 text-gray-800' };
-        } else if (eventDate.toDateString() === now.toDateString()) {
-            return { label: 'Today', color: 'bg-yellow-100 text-yellow-800' };
-        } else {
-            return { label: 'Upcoming', color: 'bg-green-100 text-green-800' };
-        }
-    };
-
     return (
         <AdminLayout
             user={auth.user}
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Events Management</h2>}
+            header={
+                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                    Events Management
+                </h2>
+            }
         >
             <Head title="Events - Admin" />
-            
+
             <div className="py-12">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    {/* Header Section */}
-                    <div className="mb-6">
-                        <div className="md:flex md:items-center md:justify-between">
-                            <div className="min-w-0 flex-1">
-                                <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-                                    Events Management
-                                </h2>
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Manage all user events and calendar activities in the system.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Search and Filters */}
-                    <div className="mb-6">
-                        <div className="bg-white shadow-sm sm:rounded-lg">
-                            <div className="p-6">
-                                <form onSubmit={handleSearch} className="flex gap-4">
-                                    <div className="flex-1">
-                                        <label htmlFor="search" className="sr-only">Search events</label>
+                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg">
+                        <div className="p-6">
+                            {/* Header with Search */}
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900">Events</h3>
+                                    <p className="text-sm text-gray-600">Manage all user events and appointments ({events.total || 0} total)</p>
+                                </div>
+                                <div className="flex space-x-3">
+                                    <form onSubmit={handleSearch} className="flex">
                                         <input
                                             type="text"
-                                            id="search"
+                                            placeholder="Search events..."
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Search events by title or description..."
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                            className="px-4 py-2 border border-gray-300 rounded-l-md focus:ring-blue-500 focus:border-blue-500 w-64"
                                         />
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                    >
-                                        Search
-                                    </button>
-                                    {filters.search && (
                                         <button
-                                            type="button"
-                                            onClick={clearSearch}
-                                            className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            type="submit"
+                                            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
                                         >
-                                            Clear
+                                            Search
                                         </button>
-                                    )}
-                                </form>
+                                        {search && (
+                                            <button
+                                                type="button"
+                                                onClick={clearSearch}
+                                                className="px-4 py-2 bg-gray-500 text-white rounded-r-md hover:bg-gray-600 focus:ring-2 focus:ring-gray-500"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </form>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Events Table */}
-                    <div className="bg-white shadow-sm sm:rounded-lg">
-                        <div className="px-4 py-5 sm:p-6">
-                            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                                <table className="min-w-full divide-y divide-gray-300">
+                            {/* Events Table */}
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                ID
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Event
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Title
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Organizer
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Description
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Event Time
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Status
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Creator
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Created
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Created At
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Actions
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-200 bg-white">
+                                    <tbody className="bg-white divide-y divide-gray-200">
                                         {events.data && events.data.length > 0 ? (
                                             events.data.map((event) => {
-                                                const status = getEventStatus(event.event_time);
+                                                const eventStatus = getEventStatus(event.event_time);
                                                 return (
                                                     <tr key={event.event_id} className="hover:bg-gray-50">
-                                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                                                            #{event.event_id}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                                            <div className="font-medium">{event.title}</div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-500">
+                                                        <td className="px-6 py-4">
                                                             <div className="max-w-xs">
-                                                                {truncateText(event.description)}
+                                                                <div className="text-sm font-medium text-gray-900 mb-1">
+                                                                    {event.title || 'Untitled Event'}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500 break-words">
+                                                                    {event.description || 'No description'}
+                                                                </div>
                                                             </div>
                                                         </td>
-                                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                                                            <div className="font-medium">
-                                                                {formatEventTime(event.event_time)}
-                                                            </div>
-                                                        </td>
-                                                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                                            <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${status.color}`}>
-                                                                {status.label}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-gray-900">
+                                                        <td className="px-6 py-4 whitespace-nowrap">
                                                             <div className="flex items-center">
-                                                                <div>
-                                                                    <div className="font-medium text-gray-900">
-                                                                        {event.user?.display_name || event.user?.name || 'Unknown'}
+                                                                <div className="flex-shrink-0 h-8 w-8">
+                                                                    <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                                                                        <span className="text-white text-sm font-medium">
+                                                                            {(event.user?.name || event.user?.email || 'U').charAt(0).toUpperCase()}
+                                                                        </span>
                                                                     </div>
-                                                                    <div className="text-gray-500">
-                                                                        {event.user?.email}
+                                                                </div>
+                                                                <div className="ml-3">
+                                                                    <div className="text-sm font-medium text-gray-900">
+                                                                        {event.user?.name || 'Unknown User'}
+                                                                    </div>
+                                                                    <div className="text-sm text-gray-500">
+                                                                        {event.user?.email || 'No email'}
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                                            {formatDate(event.created_at)}
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                            <div className="font-medium">
+                                                                {formatEventTime(event.event_time)}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${eventStatus.color}`}>
+                                                                {eventStatus.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                            {event.created_at ? new Date(event.created_at).toLocaleDateString('vi-VN') : 'Unknown'}
+                                                            <div className="text-xs text-gray-400">
+                                                                {event.created_at ? new Date(event.created_at).toLocaleTimeString('vi-VN') : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                            <div className="flex space-x-2">
+                                                                <button className="text-blue-600 hover:text-blue-900">
+                                                                    View
+                                                                </button>
+                                                                <button className="text-yellow-600 hover:text-yellow-900">
+                                                                    Edit
+                                                                </button>
+                                                                <button className="text-red-600 hover:text-red-900">
+                                                                    Delete
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
                                             })
                                         ) : (
                                             <tr>
-                                                <td colSpan="7" className="px-6 py-12 text-center">
-                                                    <div className="text-center">
-                                                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a1 1 0 011-1h6a1 1 0 011 1v4h4V3a1 1 0 011-1h6a1 1 0 011 1v4h2a3 3 0 013 3v11a3 3 0 01-3 3H6a3 3 0 01-3-3V10a3 3 0 013-3h2z" />
-                                                        </svg>
-                                                        <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
-                                                        <p className="mt-1 text-sm text-gray-500">
-                                                            {filters.search ? 'Try adjusting your search terms.' : 'No events have been created yet.'}
-                                                        </p>
-                                                    </div>
+                                                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                                                    {search ? `No events found matching "${search}"` : 'No events found'}
                                                 </td>
                                             </tr>
                                         )}
@@ -214,53 +205,43 @@ export default function Events({ auth, events, filters = {} }) {
                             </div>
 
                             {/* Pagination */}
-                            {events.last_page > 1 && (
-                                <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
-                                    <div className="flex flex-1 justify-between sm:hidden">
-                                        {events.prev_page_url && (
-                                            <a
-                                                href={events.prev_page_url}
-                                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Previous
-                                            </a>
-                                        )}
-                                        {events.next_page_url && (
-                                            <a
-                                                href={events.next_page_url}
-                                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Next
-                                            </a>
-                                        )}
+                            {events.links && events.links.length > 3 && (
+                                <div className="mt-6 flex justify-between items-center">
+                                    <div className="text-sm text-gray-700">
+                                        Showing {events.from || 0} to {events.to || 0} of {events.total || 0} results
                                     </div>
-                                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-700">
-                                                Showing <span className="font-medium">{events.from}</span> to{' '}
-                                                <span className="font-medium">{events.to}</span> of{' '}
-                                                <span className="font-medium">{events.total}</span> results
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                                {events.links.map((link, index) => (
-                                                    <a
-                                                        key={index}
-                                                        href={link.url}
-                                                        className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
-                                                            link.active
-                                                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
-                                                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                                        } ${index === 0 ? 'rounded-l-md' : ''} ${
-                                                            index === events.links.length - 1 ? 'rounded-r-md' : ''
-                                                        }`}
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                                    />
-                                                ))}
-                                            </nav>
-                                        </div>
+                                    <div className="flex space-x-1">
+                                        {events.links.map((link, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    if (link.url) {
+                                                        router.get(link.url, { search });
+                                                    }
+                                                }}
+                                                disabled={!link.url}
+                                                className={`px-3 py-2 text-sm rounded-md ${
+                                                    link.active 
+                                                        ? 'bg-blue-600 text-white' 
+                                                        : link.url 
+                                                            ? 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300' 
+                                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                            />
+                                        ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {(!events.data || events.data.length === 0) && !search && (
+                                <div className="text-center py-8">
+                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h8a2 2 0 012 2v4l4 4v10a2 2 0 01-2 2H10a2 2 0 01-2-2V11l4-4z" />
+                                    </svg>
+                                    <h3 className="mt-2 text-sm font-medium text-gray-900">No events yet</h3>
+                                    <p className="mt-1 text-sm text-gray-500">Users haven't created any events yet.</p>
                                 </div>
                             )}
                         </div>

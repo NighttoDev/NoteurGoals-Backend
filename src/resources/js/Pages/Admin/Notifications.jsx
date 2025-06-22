@@ -2,238 +2,222 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function Notifications({ auth, notifications, filters = {} }) {
+export default function Notifications({ auth, notifications = {data: []}, filters = {} }) {
     const [search, setSearch] = useState(filters.search || '');
-    const [type, setType] = useState(filters.type || 'all');
+    const [typeFilter, setTypeFilter] = useState(filters.type || 'all');
 
     const handleSearch = (e) => {
         e.preventDefault();
-        router.get(route('admin.notifications'), { search, type: type !== 'all' ? type : undefined }, {
+        router.get(route('admin.notifications'), { search, type: typeFilter }, {
             preserveState: true,
-            preserveScroll: true,
+            replace: true
         });
     };
 
-    const handleTypeChange = (e) => {
-        const newType = e.target.value;
-        setType(newType);
-        router.get(route('admin.notifications'), { 
-            search: search || undefined, 
-            type: newType !== 'all' ? newType : undefined 
-        }, {
+    const handleTypeChange = (type) => {
+        setTypeFilter(type);
+        router.get(route('admin.notifications'), { search, type }, {
             preserveState: true,
-            preserveScroll: true,
+            replace: true
         });
     };
 
     const clearFilters = () => {
         setSearch('');
-        setType('all');
+        setTypeFilter('all');
         router.get(route('admin.notifications'), {}, {
             preserveState: true,
-            preserveScroll: true,
+            replace: true
         });
-    };
-
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('vi-VN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const truncateText = (text, maxLength = 120) => {
-        if (!text) return '';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     };
 
     const getTypeColor = (type) => {
-        const colors = {
-            'reminder': 'bg-blue-100 text-blue-800',
-            'friend_update': 'bg-green-100 text-green-800',
-            'goal_progress': 'bg-purple-100 text-purple-800',
-            'ai_suggestion': 'bg-yellow-100 text-yellow-800',
-        };
-        return colors[type] || 'bg-gray-100 text-gray-800';
+        switch (type?.toLowerCase()) {
+            case 'reminder':
+                return 'bg-blue-100 text-blue-800';
+            case 'friend_update':
+                return 'bg-green-100 text-green-800';
+            case 'goal_progress':
+                return 'bg-purple-100 text-purple-800';
+            case 'ai_suggestion':
+                return 'bg-orange-100 text-orange-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
     };
 
-    const getTypeLabel = (type) => {
-        const labels = {
-            'reminder': 'Reminder',
-            'friend_update': 'Friend Update',
-            'goal_progress': 'Goal Progress',
-            'ai_suggestion': 'AI Suggestion',
-        };
-        return labels[type] || type;
+    const formatType = (type) => {
+        switch (type?.toLowerCase()) {
+            case 'reminder':
+                return 'Reminder';
+            case 'friend_update':
+                return 'Friend Update';
+            case 'goal_progress':
+                return 'Goal Progress';
+            case 'ai_suggestion':
+                return 'AI Suggestion';
+            default:
+                return type || 'Unknown';
+        }
     };
 
-    const notificationTypes = [
-        { value: 'all', label: 'All Types' },
-        { value: 'reminder', label: 'Reminder' },
-        { value: 'friend_update', label: 'Friend Update' },
-        { value: 'goal_progress', label: 'Goal Progress' },
-        { value: 'ai_suggestion', label: 'AI Suggestion' },
-    ];
+    const truncateContent = (content, maxLength = 100) => {
+        if (!content) return 'No content';
+        return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
+    };
 
     return (
         <AdminLayout
             user={auth.user}
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Notifications Management</h2>}
+            header={
+                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                    Notifications Management
+                </h2>
+            }
         >
             <Head title="Notifications - Admin" />
-            
+
             <div className="py-12">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    {/* Header Section */}
-                    <div className="mb-6">
-                        <div className="md:flex md:items-center md:justify-between">
-                            <div className="min-w-0 flex-1">
-                                <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-                                    Notifications Management
-                                </h2>
-                                <p className="mt-1 text-sm text-gray-500">
-                                    Manage all user notifications and system messages.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Search and Filters */}
-                    <div className="mb-6">
-                        <div className="bg-white shadow-sm sm:rounded-lg">
-                            <div className="p-6">
-                                <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
-                                    <div className="flex-1">
-                                        <label htmlFor="search" className="sr-only">Search notifications</label>
+                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg">
+                        <div className="p-6">
+                            {/* Header with Search and Filters */}
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-medium text-gray-900">Notifications</h3>
+                                    <p className="text-sm text-gray-600">Manage all system notifications ({notifications.total || 0} total)</p>
+                                </div>
+                                <div className="flex space-x-3">
+                                    <select
+                                        value={typeFilter}
+                                        onChange={(e) => handleTypeChange(e.target.value)}
+                                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="all">All Types</option>
+                                        <option value="reminder">Reminder</option>
+                                        <option value="friend_update">Friend Update</option>
+                                        <option value="goal_progress">Goal Progress</option>
+                                        <option value="ai_suggestion">AI Suggestion</option>
+                                    </select>
+                                    <form onSubmit={handleSearch} className="flex">
                                         <input
                                             type="text"
-                                            id="search"
+                                            placeholder="Search notifications..."
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Search notifications by content..."
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                            className="px-4 py-2 border border-gray-300 focus:ring-blue-500 focus:border-blue-500 w-64"
                                         />
-                                    </div>
-                                    <div className="w-full sm:w-48">
-                                        <label htmlFor="type" className="sr-only">Notification type</label>
-                                        <select
-                                            id="type"
-                                            value={type}
-                                            onChange={handleTypeChange}
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                        >
-                                            {notificationTypes.map((notificationType) => (
-                                                <option key={notificationType.value} value={notificationType.value}>
-                                                    {notificationType.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                    >
-                                        Search
-                                    </button>
-                                    {(filters.search || (filters.type && filters.type !== 'all')) && (
                                         <button
-                                            type="button"
-                                            onClick={clearFilters}
-                                            className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            type="submit"
+                                            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
                                         >
-                                            Clear
+                                            Search
                                         </button>
-                                    )}
-                                </form>
+                                        {(search || typeFilter !== 'all') && (
+                                            <button
+                                                type="button"
+                                                onClick={clearFilters}
+                                                className="px-4 py-2 bg-gray-500 text-white rounded-r-md hover:bg-gray-600 focus:ring-2 focus:ring-gray-500"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </form>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Notifications Table */}
-                    <div className="bg-white shadow-sm sm:rounded-lg">
-                        <div className="px-4 py-5 sm:p-6">
-                            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                                <table className="min-w-full divide-y divide-gray-300">
+                            {/* Notifications Table */}
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                ID
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Type
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Content
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                User
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Recipient
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Type
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Status
                                             </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                                Created At
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Created
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Actions
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-200 bg-white">
+                                    <tbody className="bg-white divide-y divide-gray-200">
                                         {notifications.data && notifications.data.length > 0 ? (
                                             notifications.data.map((notification) => (
                                                 <tr key={notification.notification_id} className="hover:bg-gray-50">
-                                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                                                        #{notification.notification_id}
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                                        <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${getTypeColor(notification.type)}`}>
-                                                            {getTypeLabel(notification.type)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-900">
+                                                    <td className="px-6 py-4">
                                                         <div className="max-w-xs">
-                                                            {truncateText(notification.content)}
+                                                            <div className="text-sm text-gray-900 break-words">
+                                                                {truncateContent(notification.content)}
+                                                            </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-sm text-gray-900">
+                                                    <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="flex items-center">
-                                                            <div>
-                                                                <div className="font-medium text-gray-900">
-                                                                    {notification.user?.display_name || notification.user?.name || 'Unknown'}
+                                                            <div className="flex-shrink-0 h-8 w-8">
+                                                                <div className="h-8 w-8 rounded-full bg-pink-500 flex items-center justify-center">
+                                                                    <span className="text-white text-sm font-medium">
+                                                                        {(notification.user?.name || notification.user?.email || 'U').charAt(0).toUpperCase()}
+                                                                    </span>
                                                                 </div>
-                                                                <div className="text-gray-500">
-                                                                    {notification.user?.email}
+                                                            </div>
+                                                            <div className="ml-3">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {notification.user?.name || 'Unknown User'}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500">
+                                                                    {notification.user?.email || 'No email'}
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="whitespace-nowrap px-6 py-4 text-sm">
-                                                        <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                                                            notification.is_read 
-                                                                ? 'bg-green-100 text-green-800' 
-                                                                : 'bg-red-100 text-red-800'
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(notification.type)}`}>
+                                                            {formatType(notification.type)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                            notification.is_read ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                                                         }`}>
                                                             {notification.is_read ? 'Read' : 'Unread'}
                                                         </span>
                                                     </td>
-                                                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                                        {formatDate(notification.created_at)}
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {notification.created_at ? new Date(notification.created_at).toLocaleDateString('vi-VN') : 'Unknown'}
+                                                        <div className="text-xs text-gray-400">
+                                                            {notification.created_at ? new Date(notification.created_at).toLocaleTimeString('vi-VN') : ''}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                        <div className="flex space-x-2">
+                                                            <button className="text-blue-600 hover:text-blue-900">
+                                                                View
+                                                            </button>
+                                                            <button className={`${notification.is_read ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900'}`}>
+                                                                {notification.is_read ? 'Mark Unread' : 'Mark Read'}
+                                                            </button>
+                                                            <button className="text-red-600 hover:text-red-900">
+                                                                Delete
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="6" className="px-6 py-12 text-center">
-                                                    <div className="text-center">
-                                                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1 5h-5m5 0h5m-5 0l-1 5m-5-5H9m10 0L9 17m10 0l5-5m-5 5l5 5" />
-                                                        </svg>
-                                                        <h3 className="mt-2 text-sm font-medium text-gray-900">No notifications found</h3>
-                                                        <p className="mt-1 text-sm text-gray-500">
-                                                            {filters.search || filters.type ? 'Try adjusting your search terms or filters.' : 'No notifications have been created yet.'}
-                                                        </p>
-                                                    </div>
+                                                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                                                    {search || typeFilter !== 'all' ? 'No notifications found matching your criteria' : 'No notifications found'}
                                                 </td>
                                             </tr>
                                         )}
@@ -242,53 +226,43 @@ export default function Notifications({ auth, notifications, filters = {} }) {
                             </div>
 
                             {/* Pagination */}
-                            {notifications.last_page > 1 && (
-                                <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4">
-                                    <div className="flex flex-1 justify-between sm:hidden">
-                                        {notifications.prev_page_url && (
-                                            <a
-                                                href={notifications.prev_page_url}
-                                                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Previous
-                                            </a>
-                                        )}
-                                        {notifications.next_page_url && (
-                                            <a
-                                                href={notifications.next_page_url}
-                                                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                            >
-                                                Next
-                                            </a>
-                                        )}
+                            {notifications.links && notifications.links.length > 3 && (
+                                <div className="mt-6 flex justify-between items-center">
+                                    <div className="text-sm text-gray-700">
+                                        Showing {notifications.from || 0} to {notifications.to || 0} of {notifications.total || 0} results
                                     </div>
-                                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                        <div>
-                                            <p className="text-sm text-gray-700">
-                                                Showing <span className="font-medium">{notifications.from}</span> to{' '}
-                                                <span className="font-medium">{notifications.to}</span> of{' '}
-                                                <span className="font-medium">{notifications.total}</span> results
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                                {notifications.links.map((link, index) => (
-                                                    <a
-                                                        key={index}
-                                                        href={link.url}
-                                                        className={`relative inline-flex items-center px-4 py-2 text-sm font-medium ${
-                                                            link.active
-                                                                ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
-                                                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                                        } ${index === 0 ? 'rounded-l-md' : ''} ${
-                                                            index === notifications.links.length - 1 ? 'rounded-r-md' : ''
-                                                        }`}
-                                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                                    />
-                                                ))}
-                                            </nav>
-                                        </div>
+                                    <div className="flex space-x-1">
+                                        {notifications.links.map((link, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    if (link.url) {
+                                                        router.get(link.url, { search, type: typeFilter });
+                                                    }
+                                                }}
+                                                disabled={!link.url}
+                                                className={`px-3 py-2 text-sm rounded-md ${
+                                                    link.active 
+                                                        ? 'bg-blue-600 text-white' 
+                                                        : link.url 
+                                                            ? 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300' 
+                                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                            />
+                                        ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Empty State */}
+                            {(!notifications.data || notifications.data.length === 0) && !search && typeFilter === 'all' && (
+                                <div className="text-center py-8">
+                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                    </svg>
+                                    <h3 className="mt-2 text-sm font-medium text-gray-900">No notifications yet</h3>
+                                    <p className="mt-1 text-sm text-gray-500">No notifications have been sent yet.</p>
                                 </div>
                             )}
                         </div>
