@@ -18,6 +18,7 @@ Route::get('/', function () {
         'name' => 'NoteurGoals API',
         'version' => '1.0.0'
     ]);
+    return view('app');
 });
 
 Route::get('/dashboard', function () {
