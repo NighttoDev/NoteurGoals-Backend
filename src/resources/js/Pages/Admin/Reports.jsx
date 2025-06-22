@@ -1,12 +1,12 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head } from '@inertiajs/react';
 
-export default function Reports({ auth, reports, userStats, goalStats, revenueStats }) {
+export default function Reports({ auth, userStats = {}, goalStats = {}, revenueStats = {} }) {
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('vi-VN', {
             style: 'currency',
             currency: 'VND'
-        }).format(amount);
+        }).format(amount || 0);
     };
 
     const formatPercent = (value, total) => {
@@ -52,10 +52,20 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
         );
     };
 
+    // Calculate additional metrics
+    const conversionRate = formatPercent(userStats.premium_users, userStats.total_users);
+    const completionRate = formatPercent(goalStats.completed_goals, goalStats.total_goals);
+    const arpu = userStats.total_users > 0 ? (revenueStats.total_revenue || 0) / userStats.total_users : 0;
+    const monthlyGrowth = userStats.total_users > 0 ? formatPercent(userStats.new_users_this_month, userStats.total_users) : '0%';
+
     return (
         <AdminLayout
             user={auth.user}
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Reports & Analytics</h2>}
+            header={
+                <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                    Reports & Analytics
+                </h2>
+            }
         >
             <Head title="Reports - Admin" />
             
@@ -69,8 +79,13 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                                     Reports & Analytics
                                 </h2>
                                 <p className="mt-1 text-sm text-gray-500">
-                                    Comprehensive insights and statistics about your platform.
+                                    Comprehensive insights and statistics about your platform performance.
                                 </p>
+                            </div>
+                            <div className="mt-4 flex md:mt-0 md:ml-4">
+                                <span className="text-sm text-gray-500">
+                                    Last updated: {new Date().toLocaleString('vi-VN')}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -81,21 +96,21 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             <StatCard
                                 title="Total Users"
-                                value={userStats?.total_users?.toLocaleString() || '0'}
-                                subtitle={`${userStats?.new_users_this_month || 0} new this month`}
+                                value={userStats.total_users?.toLocaleString() || '0'}
+                                subtitle={`${userStats.new_users_this_month || 0} new this month`}
                                 bgColor="bg-blue-500"
                                 textColor="text-gray-900"
                                 icon={
                                     <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
                                     </svg>
                                 }
                             />
                             
                             <StatCard
                                 title="Active Users"
-                                value={userStats?.active_users?.toLocaleString() || '0'}
-                                subtitle={formatPercent(userStats?.active_users, userStats?.total_users)}
+                                value={userStats.active_users?.toLocaleString() || '0'}
+                                subtitle={`${conversionRate} of total users`}
                                 bgColor="bg-green-500"
                                 textColor="text-gray-900"
                                 icon={
@@ -107,8 +122,8 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                             
                             <StatCard
                                 title="Premium Users"
-                                value={userStats?.premium_users?.toLocaleString() || '0'}
-                                subtitle={formatPercent(userStats?.premium_users, userStats?.total_users)}
+                                value={userStats.premium_users?.toLocaleString() || '0'}
+                                subtitle={`${conversionRate} conversion rate`}
                                 bgColor="bg-yellow-500"
                                 textColor="text-gray-900"
                                 icon={
@@ -120,8 +135,8 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                             
                             <StatCard
                                 title="Total Revenue"
-                                value={formatCurrency(revenueStats?.total_revenue || 0)}
-                                subtitle={`${formatCurrency(revenueStats?.monthly_revenue || 0)} this month`}
+                                value={formatCurrency(revenueStats.total_revenue)}
+                                subtitle={`${formatCurrency(revenueStats.monthly_revenue)} this month`}
                                 bgColor="bg-purple-500"
                                 textColor="text-gray-900"
                                 icon={
@@ -133,29 +148,60 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                         </div>
                     </div>
 
+                    {/* Key Performance Indicators */}
+                    <div className="mb-8">
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">Key Performance Indicators</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="bg-white p-6 rounded-lg shadow-sm">
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-blue-600">{completionRate}</div>
+                                    <div className="text-sm text-gray-500 mt-1">Goal Completion Rate</div>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-lg shadow-sm">
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-green-600">{formatCurrency(arpu)}</div>
+                                    <div className="text-sm text-gray-500 mt-1">Average Revenue Per User</div>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-lg shadow-sm">
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-purple-600">{monthlyGrowth}</div>
+                                    <div className="text-sm text-gray-500 mt-1">Monthly User Growth</div>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-lg shadow-sm">
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-orange-600">{conversionRate}</div>
+                                    <div className="text-sm text-gray-500 mt-1">Premium Conversion Rate</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Detailed Statistics */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                         {/* User Statistics */}
                         <div className="bg-white shadow-sm sm:rounded-lg">
                             <div className="px-4 py-5 sm:p-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-4">User Statistics</h3>
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">User Analytics</h3>
                                 <div className="space-y-4">
                                     <ProgressBar
                                         label="Active Users"
-                                        value={userStats?.active_users || 0}
-                                        total={userStats?.total_users || 0}
+                                        value={userStats.active_users || 0}
+                                        total={userStats.total_users || 0}
                                         color="bg-green-500"
                                     />
                                     <ProgressBar
                                         label="Premium Users"
-                                        value={userStats?.premium_users || 0}
-                                        total={userStats?.total_users || 0}
+                                        value={userStats.premium_users || 0}
+                                        total={userStats.total_users || 0}
                                         color="bg-yellow-500"
                                     />
                                     <ProgressBar
                                         label="New Users This Month"
-                                        value={userStats?.new_users_this_month || 0}
-                                        total={userStats?.total_users || 0}
+                                        value={userStats.new_users_this_month || 0}
+                                        total={userStats.total_users || 1}
                                         color="bg-blue-500"
                                     />
                                 </div>
@@ -163,11 +209,11 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                                 <div className="mt-6 pt-6 border-t border-gray-200">
                                     <div className="grid grid-cols-2 gap-4 text-center">
                                         <div>
-                                            <p className="text-2xl font-semibold text-gray-900">{userStats?.total_users || 0}</p>
+                                            <p className="text-2xl font-semibold text-gray-900">{userStats.total_users || 0}</p>
                                             <p className="text-sm text-gray-500">Total Users</p>
                                         </div>
                                         <div>
-                                            <p className="text-2xl font-semibold text-green-600">{userStats?.active_users || 0}</p>
+                                            <p className="text-2xl font-semibold text-green-600">{userStats.active_users || 0}</p>
                                             <p className="text-sm text-gray-500">Active Users</p>
                                         </div>
                                     </div>
@@ -178,24 +224,24 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                         {/* Goal Statistics */}
                         <div className="bg-white shadow-sm sm:rounded-lg">
                             <div className="px-4 py-5 sm:p-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-4">Goal Statistics</h3>
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">Goal Analytics</h3>
                                 <div className="space-y-4">
                                     <ProgressBar
                                         label="Completed Goals"
-                                        value={goalStats?.completed_goals || 0}
-                                        total={goalStats?.total_goals || 0}
+                                        value={goalStats.completed_goals || 0}
+                                        total={goalStats.total_goals || 0}
                                         color="bg-green-500"
                                     />
                                     <ProgressBar
                                         label="Active Goals"
-                                        value={goalStats?.active_goals || 0}
-                                        total={goalStats?.total_goals || 0}
+                                        value={goalStats.active_goals || 0}
+                                        total={goalStats.total_goals || 0}
                                         color="bg-blue-500"
                                     />
                                     <ProgressBar
                                         label="New Goals This Month"
-                                        value={goalStats?.new_goals_this_month || 0}
-                                        total={goalStats?.total_goals || 0}
+                                        value={goalStats.new_goals_this_month || 0}
+                                        total={goalStats.total_goals || 1}
                                         color="bg-purple-500"
                                     />
                                 </div>
@@ -203,11 +249,11 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                                 <div className="mt-6 pt-6 border-t border-gray-200">
                                     <div className="grid grid-cols-2 gap-4 text-center">
                                         <div>
-                                            <p className="text-2xl font-semibold text-gray-900">{goalStats?.total_goals || 0}</p>
+                                            <p className="text-2xl font-semibold text-gray-900">{goalStats.total_goals || 0}</p>
                                             <p className="text-sm text-gray-500">Total Goals</p>
                                         </div>
                                         <div>
-                                            <p className="text-2xl font-semibold text-green-600">{goalStats?.completed_goals || 0}</p>
+                                            <p className="text-2xl font-semibold text-green-600">{goalStats.completed_goals || 0}</p>
                                             <p className="text-sm text-gray-500">Completed</p>
                                         </div>
                                     </div>
@@ -221,165 +267,80 @@ export default function Reports({ auth, reports, userStats, goalStats, revenueSt
                         <div className="bg-white shadow-sm sm:rounded-lg">
                             <div className="px-4 py-5 sm:p-6">
                                 <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Analytics</h3>
-                                
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="text-center p-6 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
-                                        <div className="text-3xl font-bold text-green-600 mb-2">
-                                            {formatCurrency(revenueStats?.total_revenue || 0)}
+                                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-green-600">
+                                            {formatCurrency(revenueStats.total_revenue)}
                                         </div>
-                                        <div className="text-sm text-green-800">Total Revenue</div>
+                                        <div className="text-sm text-gray-600 mt-1">Total Revenue</div>
                                     </div>
-                                    
-                                    <div className="text-center p-6 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
-                                        <div className="text-3xl font-bold text-blue-600 mb-2">
-                                            {formatCurrency(revenueStats?.monthly_revenue || 0)}
+                                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-blue-600">
+                                            {formatCurrency(revenueStats.monthly_revenue)}
                                         </div>
-                                        <div className="text-sm text-blue-800">This Month</div>
+                                        <div className="text-sm text-gray-600 mt-1">Monthly Revenue</div>
                                     </div>
-                                    
-                                    <div className="text-center p-6 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
-                                        <div className="text-3xl font-bold text-purple-600 mb-2">
-                                            {userStats?.premium_users || 0}
+                                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                                        <div className="text-2xl font-bold text-purple-600">
+                                            {formatCurrency(arpu)}
                                         </div>
-                                        <div className="text-sm text-purple-800">Paying Customers</div>
+                                        <div className="text-sm text-gray-600 mt-1">ARPU</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Performance Metrics */}
+                    {/* System Health */}
                     <div className="mb-8">
                         <div className="bg-white shadow-sm sm:rounded-lg">
                             <div className="px-4 py-5 sm:p-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-4">Performance Metrics</h3>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <div className="border border-gray-200 rounded-lg p-4">
-                                        <div className="text-2xl font-semibold text-gray-900">
-                                            {goalStats?.total_goals > 0 
-                                                ? formatPercent(goalStats?.completed_goals, goalStats?.total_goals)
-                                                : '0%'
-                                            }
-                                        </div>
-                                        <div className="text-sm text-gray-500">Goal Completion Rate</div>
-                                    </div>
-                                    
-                                    <div className="border border-gray-200 rounded-lg p-4">
-                                        <div className="text-2xl font-semibold text-gray-900">
-                                            {userStats?.total_users > 0 
-                                                ? formatPercent(userStats?.premium_users, userStats?.total_users)
-                                                : '0%'
-                                            }
-                                        </div>
-                                        <div className="text-sm text-gray-500">Premium Conversion</div>
-                                    </div>
-                                    
-                                    <div className="border border-gray-200 rounded-lg p-4">
-                                        <div className="text-2xl font-semibold text-gray-900">
-                                            {userStats?.total_users > 0 
-                                                ? formatPercent(userStats?.active_users, userStats?.total_users)
-                                                : '0%'
-                                            }
-                                        </div>
-                                        <div className="text-sm text-gray-500">User Engagement</div>
-                                    </div>
-                                    
-                                    <div className="border border-gray-200 rounded-lg p-4">
-                                        <div className="text-2xl font-semibold text-gray-900">
-                                            {userStats?.premium_users > 0 
-                                                ? formatCurrency((revenueStats?.total_revenue || 0) / userStats.premium_users)
-                                                : formatCurrency(0)
-                                            }
-                                        </div>
-                                        <div className="text-sm text-gray-500">ARPU</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Growth Indicators */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="bg-white shadow-sm sm:rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-4">Growth Indicators</h3>
-                                
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                                        <div>
-                                            <div className="font-medium text-green-900">New Users This Month</div>
-                                            <div className="text-sm text-green-600">User acquisition rate</div>
-                                        </div>
-                                        <div className="text-2xl font-bold text-green-700">
-                                            {userStats?.new_users_this_month || 0}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                                        <div>
-                                            <div className="font-medium text-blue-900">New Goals This Month</div>
-                                            <div className="text-sm text-blue-600">Goal creation rate</div>
-                                        </div>
-                                        <div className="text-2xl font-bold text-blue-700">
-                                            {goalStats?.new_goals_this_month || 0}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                                        <div>
-                                            <div className="font-medium text-purple-900">Monthly Revenue</div>
-                                            <div className="text-sm text-purple-600">Revenue growth</div>
-                                        </div>
-                                        <div className="text-2xl font-bold text-purple-700">
-                                            {formatCurrency(revenueStats?.monthly_revenue || 0)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white shadow-sm sm:rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
                                 <h3 className="text-lg font-medium text-gray-900 mb-4">System Health</h3>
-                                
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm font-medium text-gray-700">Platform Status</span>
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            Operational
-                                        </span>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        </div>
+                                        <div className="ml-3">
+                                            <p className="text-sm font-medium text-gray-900">Database</p>
+                                            <p className="text-sm text-gray-500">Operational</p>
+                                        </div>
                                     </div>
-                                    
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm font-medium text-gray-700">Data Integrity</span>
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            Good
-                                        </span>
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        </div>
+                                        <div className="ml-3">
+                                            <p className="text-sm font-medium text-gray-900">API Services</p>
+                                            <p className="text-sm text-gray-500">Operational</p>
+                                        </div>
                                     </div>
-                                    
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm font-medium text-gray-700">User Satisfaction</span>
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            High
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                                        <div className="text-sm text-gray-600">
-                                            Last updated: {new Date().toLocaleDateString('vi-VN', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0">
+                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        </div>
+                                        <div className="ml-3">
+                                            <p className="text-sm font-medium text-gray-900">File Storage</p>
+                                            <p className="text-sm text-gray-500">Operational</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Empty State */}
+                    {(!userStats.total_users && !goalStats.total_goals && !revenueStats.total_revenue) && (
+                        <div className="text-center py-12">
+                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <h3 className="mt-2 text-sm font-medium text-gray-900">No data available</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Start using the platform to see analytics and reports here.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </AdminLayout>
