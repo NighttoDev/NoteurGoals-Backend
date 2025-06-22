@@ -7,6 +7,11 @@ use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Event\EventController;
 use App\Http\Controllers\File\FileController;
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Milestone\MilestoneController;
+use App\Http\Controllers\Notification\NotificationController;
+use App\Http\Controllers\Friendship\FriendshipController;
+use App\Http\Controllers\AISuggestion\AISuggestionController;
+use App\Http\Controllers\Subscription\SubscriptionController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
@@ -40,86 +45,62 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Goal management
-    Route::get('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'index']);
-    Route::post('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'store']);
-    Route::get('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'show']);
-    Route::put('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'update']);
-    Route::delete('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'destroy']);
-    Route::post('/goals/{goal}/collaborators', [\App\Http\Controllers\Goal\GoalController::class, 'addCollaborator']);
-    Route::delete('/goals/{goal}/collaborators/{userId}', [\App\Http\Controllers\Goal\GoalController::class, 'removeCollaborator']);
-    Route::put('/goals/{goal}/share', [\App\Http\Controllers\Goal\GoalController::class, 'updateShareSettings']);
+    Route::get('/goals', [GoalController::class, 'index']);
+    Route::post('/goals', [GoalController::class, 'store']);
+    Route::get('/goals/{goal}', [GoalController::class, 'show']);
+    Route::put('/goals/{goal}', [GoalController::class, 'update']);
+    Route::delete('/goals/{goal}', [GoalController::class, 'destroy']);
+    Route::post('/goals/{goal}/collaborators', [GoalController::class, 'addCollaborator']);
+    Route::delete('/goals/{goal}/collaborators/{userId}', [GoalController::class, 'removeCollaborator']);
+    Route::put('/goals/{goal}/share', [GoalController::class, 'updateShareSettings']);
 
     // Notes
-    Route::get('/notes', [\App\Http\Controllers\Note\NoteController::class, 'index']);
-    Route::post('/notes', [\App\Http\Controllers\Note\NoteController::class, 'store']);
-    Route::get('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'show']);
-    Route::put('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'update']);
-    Route::delete('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'destroy']);
+    Route::get('/notes', [NoteController::class, 'index']);
+    Route::post('/notes', [NoteController::class, 'store']);
+    Route::get('/notes/{note}', [NoteController::class, 'show']);
+    Route::put('/notes/{note}', [NoteController::class, 'update']);
+    Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
 
     // Events
-    Route::get('/events', [\App\Http\Controllers\Event\EventController::class, 'index']);
-    Route::post('/events', [\App\Http\Controllers\Event\EventController::class, 'store']);
-    Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
-    Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
-    Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
-
-    // Goal management
-    Route::get('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'index']);
-    Route::post('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'store']);
-    Route::get('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'show']);
-    Route::put('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'update']);
-    Route::delete('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'destroy']);
-    Route::post('/goals/{goal}/collaborators', [\App\Http\Controllers\Goal\GoalController::class, 'addCollaborator']);
-    Route::delete('/goals/{goal}/collaborators/{userId}', [\App\Http\Controllers\Goal\GoalController::class, 'removeCollaborator']);
-    Route::put('/goals/{goal}/share', [\App\Http\Controllers\Goal\GoalController::class, 'updateShareSettings']);
-
-    // Notes
-    Route::get('/notes', [\App\Http\Controllers\Note\NoteController::class, 'index']);
-    Route::post('/notes', [\App\Http\Controllers\Note\NoteController::class, 'store']);
-    Route::get('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'show']);
-    Route::put('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'update']);
-    Route::delete('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'destroy']);
-
-    // Events
-    Route::get('/events', [\App\Http\Controllers\Event\EventController::class, 'index']);
-    Route::post('/events', [\App\Http\Controllers\Event\EventController::class, 'store']);
-    Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
-    Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
-    Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
+    Route::get('/events', [EventController::class, 'index']);
+    Route::post('/events', [EventController::class, 'store']);
+    Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::put('/events/{event}', [EventController::class, 'update']);
+    Route::delete('/events/{event}', [EventController::class, 'destroy']);
 
     // Milestones
-    Route::get('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'index']);
-    Route::post('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'store']);
-    Route::get('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'show']);
-    Route::put('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'update']);
-    Route::delete('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'destroy']);
+    Route::get('/goals/{goal}/milestones', [MilestoneController::class, 'index']);
+    Route::post('/goals/{goal}/milestones', [MilestoneController::class, 'store']);
+    Route::get('/milestones/{milestone}', [MilestoneController::class, 'show']);
+    Route::put('/milestones/{milestone}', [MilestoneController::class, 'update']);
+    Route::delete('/milestones/{milestone}', [MilestoneController::class, 'destroy']);
 
     // Notifications
-    Route::get('/notifications', [\App\Http\Controllers\Notification\NotificationController::class, 'index']);
-    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Notification\NotificationController::class, 'markAsRead']);
-    Route::delete('/notifications/{notification}', [\App\Http\Controllers\Notification\NotificationController::class, 'destroy']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
     // Friendships
-    Route::get('/friends', [\App\Http\Controllers\Friendship\FriendshipController::class, 'index']);
-    Route::post('/friends/request', [\App\Http\Controllers\Friendship\FriendshipController::class, 'sendRequest']);
-    Route::post('/friends/{friendship}/respond', [\App\Http\Controllers\Friendship\FriendshipController::class, 'respond']);
-    Route::delete('/friends/{friendship}', [\App\Http\Controllers\Friendship\FriendshipController::class, 'destroy']);
+    Route::get('/friends', [FriendshipController::class, 'index']);
+    Route::post('/friends/request', [FriendshipController::class, 'sendRequest']);
+    Route::post('/friends/{friendship}/respond', [FriendshipController::class, 'respond']);
+    Route::delete('/friends/{friendship}', [FriendshipController::class, 'destroy']);
 
     // Files
-    Route::get('/files', [\App\Http\Controllers\File\FileController::class, 'index']);
-    Route::post('/files', [\App\Http\Controllers\File\FileController::class, 'store']);
-    Route::get('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'show']);
-    Route::delete('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'destroy']);
+    Route::get('/files', [FileController::class, 'index']);
+    Route::post('/files', [FileController::class, 'store']);
+    Route::get('/files/{file}', [FileController::class, 'show']);
+    Route::delete('/files/{file}', [FileController::class, 'destroy']);
 
     // AI Suggestions
-    Route::get('/ai-suggestions', [\App\Http\Controllers\AISuggestion\AISuggestionController::class, 'index']);
-    Route::post('/ai-suggestions/{suggestion}/read', [\App\Http\Controllers\AISuggestion\AISuggestionController::class, 'markAsRead']);
+    Route::get('/ai-suggestions', [AISuggestionController::class, 'index']);
+    Route::post('/ai-suggestions/{suggestion}/read', [AISuggestionController::class, 'markAsRead']);
 
     // Subscriptions
-    Route::get('/subscription-plans', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'plans']);
-    Route::get('/my-subscriptions', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'mySubscriptions']);
-    Route::post('/subscribe', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'subscribe']);
-    Route::post('/subscriptions/{subscription}/cancel', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'cancel']);
+    Route::get('/subscription-plans', [SubscriptionController::class, 'plans']);
+    Route::get('/my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
+    Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
+    Route::post('/subscriptions/{subscription}/cancel', [SubscriptionController::class, 'cancel']);
 });
 
 // Thêm routes cho callbacks trực tiếp không phụ thuộc session
