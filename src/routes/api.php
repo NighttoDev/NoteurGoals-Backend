@@ -58,40 +58,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
     Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
     Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
-
-    // Milestones
-    Route::get('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'index']);
-    Route::post('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'store']);
-    Route::get('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'show']);
-    Route::put('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'update']);
-    Route::delete('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'destroy']);
-
-    // Notifications
-    Route::get('/notifications', [\App\Http\Controllers\Notification\NotificationController::class, 'index']);
-    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Notification\NotificationController::class, 'markAsRead']);
-    Route::delete('/notifications/{notification}', [\App\Http\Controllers\Notification\NotificationController::class, 'destroy']);
-
-    // Friendships
-    Route::get('/friends', [\App\Http\Controllers\Friendship\FriendshipController::class, 'index']);
-    Route::post('/friends/request', [\App\Http\Controllers\Friendship\FriendshipController::class, 'sendRequest']);
-    Route::post('/friends/{friendship}/respond', [\App\Http\Controllers\Friendship\FriendshipController::class, 'respond']);
-    Route::delete('/friends/{friendship}', [\App\Http\Controllers\Friendship\FriendshipController::class, 'destroy']);
-
-    // Files
-    Route::get('/files', [\App\Http\Controllers\File\FileController::class, 'index']);
-    Route::post('/files', [\App\Http\Controllers\File\FileController::class, 'store']);
-    Route::get('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'show']);
-    Route::delete('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'destroy']);
-
-    // AI Suggestions
-    Route::get('/ai-suggestions', [\App\Http\Controllers\AISuggestion\AISuggestionController::class, 'index']);
-    Route::post('/ai-suggestions/{suggestion}/read', [\App\Http\Controllers\AISuggestion\AISuggestionController::class, 'markAsRead']);
-
-    // Subscriptions
-    Route::get('/subscription-plans', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'plans']);
-    Route::get('/my-subscriptions', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'mySubscriptions']);
-    Route::post('/subscribe', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'subscribe']);
-    Route::post('/subscriptions/{subscription}/cancel', [\App\Http\Controllers\Subscription\SubscriptionController::class, 'cancel']);
 });
 
 // Thêm routes cho callbacks trực tiếp không phụ thuộc session
