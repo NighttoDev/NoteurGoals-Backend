@@ -34,6 +34,30 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Goal management
+    Route::get('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'index']);
+    Route::post('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'store']);
+    Route::get('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'show']);
+    Route::put('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'update']);
+    Route::delete('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'destroy']);
+    Route::post('/goals/{goal}/collaborators', [\App\Http\Controllers\Goal\GoalController::class, 'addCollaborator']);
+    Route::delete('/goals/{goal}/collaborators/{userId}', [\App\Http\Controllers\Goal\GoalController::class, 'removeCollaborator']);
+    Route::put('/goals/{goal}/share', [\App\Http\Controllers\Goal\GoalController::class, 'updateShareSettings']);
+
+    // Notes
+    Route::get('/notes', [\App\Http\Controllers\Note\NoteController::class, 'index']);
+    Route::post('/notes', [\App\Http\Controllers\Note\NoteController::class, 'store']);
+    Route::get('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'show']);
+    Route::put('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'update']);
+    Route::delete('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'destroy']);
+
+    // Events
+    Route::get('/events', [\App\Http\Controllers\Event\EventController::class, 'index']);
+    Route::post('/events', [\App\Http\Controllers\Event\EventController::class, 'store']);
+    Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
+    Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
+    Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
 });
 
 // Thêm routes cho callbacks trực tiếp không phụ thuộc session
