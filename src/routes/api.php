@@ -2,8 +2,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Goal\GoalController;
+use App\Http\Controllers\Note\NoteController;
+use App\Http\Controllers\Event\EventController;
+use App\Http\Controllers\File\FileController;
+use App\Http\Controllers\Admin\AdminController;
 
-// Các routes công khai - không yêu cầu xác thực
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);
