@@ -11,13 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
+        Schema::create('Users', function (Blueprint $table) {
+            $table->id('user_id');
+            $table->string('display_name', 100);
+            $table->string('email', 100)->unique();
+            $table->string('password_hash');
+            $table->string('avatar_url', 255)->nullable();
+            $table->enum('registration_type', ['email','google','facebook']);
+            $table->enum('status', ['active','banned','pending','unverified'])->default('unverified');
+            $table->string('reset_token', 255)->nullable();
+            $table->string('verification_token', 255)->nullable();
+            $table->timestamp('last_login_at')->nullable();
             $table->timestamps();
         });
 
@@ -29,7 +33,7 @@ return new class extends Migration
 
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
-            $table->foreignId('user_id')->nullable()->index();
+            $table->unsignedBigInteger('user_id')->nullable()->index();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->longText('payload');
@@ -42,7 +46,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
+        Schema::dropIfExists('Users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }

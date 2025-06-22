@@ -2,6 +2,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Goal\GoalController;
+use App\Http\Controllers\Goal\MilestoneController;
 
 // Các routes công khai - không yêu cầu xác thực
 Route::post('/register', [AuthController::class, 'register']);
@@ -34,6 +36,15 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Goal management
+    Route::apiResource('goals', GoalController::class);
+
+    // Milestone management nested under goals
+    Route::get('goals/{goal}/milestones', [MilestoneController::class, 'index']);
+    Route::post('goals/{goal}/milestones', [MilestoneController::class, 'store']);
+    Route::put('goals/{goal}/milestones/{milestone}', [MilestoneController::class, 'update']);
+    Route::delete('goals/{goal}/milestones/{milestone}', [MilestoneController::class, 'destroy']);
 });
 
 // Thêm routes cho callbacks trực tiếp không phụ thuộc session
