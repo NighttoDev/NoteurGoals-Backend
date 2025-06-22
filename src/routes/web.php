@@ -6,27 +6,18 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Health check cho root domain (admin.noteurgoals.live)
-// Route::get('/health', function () {
-//     return response()->json([
-//         'status' => 'healthy',
-//         'service' => 'NoteurGoals Backend',
-//         'timestamp' => now()
-//     ]);
-// });
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'message' => 'Web server is running'
+    ]);
+});
 
-// Route::get('/', function () {
-//     return response()->json([
-//         'message' => 'NoteurGoals Backend API',
-//         'status' => 'running',
-//         'version' => '1.0.0',
-//         'endpoints' => [
-//             'api' => url('/api'),
-//             'health' => url('/health'),
-//             'docs' => url('/api/documentation')
-//         ]
-//     ]);
-// });
 Route::get('/', function () {
+    return response()->json([
+        'name' => 'NoteurGoals API',
+        'version' => '1.0.0'
+    ]);
     return view('app');
 });
 
@@ -38,6 +29,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+Route::get('/status', function () {
+    return response()->json([
+        'status' => 'ok',
+        'timestamp' => now()
+    ]);
 });
 
 require __DIR__.'/auth.php';
