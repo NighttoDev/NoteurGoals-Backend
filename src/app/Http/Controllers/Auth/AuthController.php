@@ -382,7 +382,28 @@ class AuthController extends Controller
     /**
      * Tạo URL xác thực Google và trả về cho frontend
      */
-// public function getGoogleAuthUrl()
+    public function getGoogleAuthUrl()
+    {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Google OAuth not implemented yet',
+            'url' => null
+        ], 501);
+    }
+
+    /**
+     * Get Facebook OAuth URL (commented out implementation)
+     */
+    public function getFacebookAuthUrl()
+    {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Facebook OAuth not implemented yet',
+            'url' => null
+        ], 501);
+    }
+
+// public function getGoogleAuthUrl_COMMENTED()
 // {
 //     try {
 //         // Kiểm tra xem có thể tạo instance Socialite không

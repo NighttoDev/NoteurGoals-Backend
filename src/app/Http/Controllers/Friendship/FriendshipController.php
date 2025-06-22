@@ -13,8 +13,8 @@ class FriendshipController extends Controller
     public function index(Request $request)
     {
         $friends = Friendship::where(function ($q) {
-            $q->where('user_id_1', Auth::id())
-              ->orWhere('user_id_2', Auth::id());
+            $q->where('user_id_1', Auth::user()->user_id)
+              ->orWhere('user_id_2', Auth::user()->user_id);
         })
         ->where('status', 'accepted')
         ->paginate(10);
@@ -32,12 +32,12 @@ class FriendshipController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        if (Auth::id() == $request->user_id) {
+        if (Auth::user()->user_id == $request->user_id) {
             return response()->json(['message' => 'Cannot friend yourself'], 400);
         }
 
         $friendship = Friendship::create([
-            'user_id_1' => Auth::id(),
+            'user_id_1' => Auth::user()->user_id,
             'user_id_2' => $request->user_id,
             'status' => 'pending',
         ]);
@@ -47,7 +47,7 @@ class FriendshipController extends Controller
 
     public function respond(Request $request, Friendship $friendship)
     {
-        if ($friendship->user_id_2 !== Auth::id()) {
+        if ($friendship->user_id_2 !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -67,12 +67,12 @@ class FriendshipController extends Controller
 
     public function destroy(Friendship $friendship)
     {
-        if ($friendship->user_id_1 !== Auth::id() && $friendship->user_id_2 !== Auth::id()) {
+        if ($friendship->user_id_1 !== Auth::user()->user_id && $friendship->user_id_2 !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $friendship->delete();
 
-        return response()->json(['message' => 'Friend removed']);
+        return response()->json(['message' => 'Friendship deleted successfully']);
     }
 }

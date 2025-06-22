@@ -60,6 +60,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notes/{note}', [NoteController::class, 'show']);
     Route::put('/notes/{note}', [NoteController::class, 'update']);
     Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
+    Route::post('/notes/{note}/goals', [NoteController::class, 'linkGoal']);
+    Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
+    Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
+    Route::delete('/notes/{note}/milestones/{milestoneId}', [NoteController::class, 'unlinkMilestone']);
 
     // Events
     Route::get('/events', [EventController::class, 'index']);
@@ -67,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/events/{event}', [EventController::class, 'show']);
     Route::put('/events/{event}', [EventController::class, 'update']);
     Route::delete('/events/{event}', [EventController::class, 'destroy']);
+    Route::post('/events/{event}/goals', [EventController::class, 'linkGoal']);
+    Route::delete('/events/{event}/goals/{goalId}', [EventController::class, 'unlinkGoal']);
 
     // Milestones
     Route::get('/goals/{goal}/milestones', [MilestoneController::class, 'index']);
@@ -91,10 +97,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/files', [FileController::class, 'store']);
     Route::get('/files/{file}', [FileController::class, 'show']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
+    Route::get('/files/{file}/with-links', [FileController::class, 'showWithLinks']);
+    Route::get('/files/{file}/download', [FileController::class, 'download']);
+    Route::post('/files/{file}/goals', [FileController::class, 'linkGoal']);
+    Route::delete('/files/{file}/goals/{goalId}', [FileController::class, 'unlinkGoal']);
+    Route::post('/files/{file}/notes', [FileController::class, 'linkNote']);
+    Route::delete('/files/{file}/notes/{noteId}', [FileController::class, 'unlinkNote']);
 
     // AI Suggestions
     Route::get('/ai-suggestions', [AISuggestionController::class, 'index']);
+    Route::get('/ai-suggestions/{suggestion}', [AISuggestionController::class, 'show']);
+    Route::get('/ai-suggestions/{suggestion}/with-links', [AISuggestionController::class, 'showWithLinks']);
+    Route::get('/ai-suggestions/type/{type}', [AISuggestionController::class, 'getByType']);
+    Route::get('/ai-suggestions/unread/count', [AISuggestionController::class, 'getUnreadCount']);
     Route::post('/ai-suggestions/{suggestion}/read', [AISuggestionController::class, 'markAsRead']);
+    Route::post('/ai-suggestions/{suggestion}/unread', [AISuggestionController::class, 'markAsUnread']);
+    Route::post('/ai-suggestions/read-all', [AISuggestionController::class, 'markAllAsRead']);
+    Route::post('/ai-suggestions/{suggestion}/goals', [AISuggestionController::class, 'linkGoal']);
+    Route::delete('/ai-suggestions/{suggestion}/goals/{goalId}', [AISuggestionController::class, 'unlinkGoal']);
 
     // Subscriptions
     Route::get('/subscription-plans', [SubscriptionController::class, 'plans']);
