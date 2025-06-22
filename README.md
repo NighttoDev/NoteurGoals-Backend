@@ -1,66 +1,146 @@
 # NoteurGoals Backend
 
-## Hướng Dẫn Cài Đặt Môi Trường Phát Triển
+Hệ thống quản lý mục tiêu với Laravel backend và giao diện admin React.
 
-1. Clone repository:
+## 🚀 Khởi Chạy Nhanh
+
+### Yêu Cầu
+- Docker & Docker Compose
+- Git
+
+### Chạy Development (Khuyến nghị)
 ```bash
+# Clone project
 git clone <repository-url>
-cd NoteurGoals-Backend
+cd NoteurGoals-Backend-1
+
+# Chạy development với hot-reload
+docker-compose -f docker-compose.dev.yml up -d
+
+# Truy cập: http://localhost:8000
 ```
 
-2. Khởi động Docker containers:
+### Chạy Production
 ```bash
+# Chạy production environment
 docker-compose up -d
 ```
 
-3. Cài đặt dependencies và thiết lập Laravel:
+## 🎯 Truy Cập Hệ Thống
+
+### Admin Panel
+- **Đăng nhập**: `http://localhost:8000/login`
+- **Dashboard**: `http://localhost:8000/dashboard`
+- **Chức năng**: Quản lý Users, Goals, Notes, Events, Subscriptions
+
+### API Endpoints
+- **Base URL**: `http://localhost:8000/api`
+- **Health Check**: `http://localhost:8000/api/health`
+
+## 🏗️ Công Nghệ
+
+- **Backend**: Laravel 11 + PHP 8.2
+- **Frontend**: React + Inertia.js
+- **Database**: MySQL (remote)
+- **Container**: Docker + Nginx
+- **Build**: Vite (hot-reload trong development)
+
+
+## 🛠️ Lệnh Thường Dùng
+
+### Docker
 ```bash
-docker-compose exec app bash
-composer install
+# Development
+docker-compose -f docker-compose.dev.yml up -d     # Khởi chạy
+docker-compose -f docker-compose.dev.yml down      # Dừng
+docker-compose -f docker-compose.dev.yml logs -f   # Xem logs
+
+# Production
+docker-compose up -d      # Khởi chạy
+docker-compose down       # Dừng
 ```
 
-## Quy Trình Phát Triển
-
-1. Luôn cập nhật code mới nhất trước khi bắt đầu làm việc:
+### Laravel (trong container)
 ```bash
-git pull origin main
+# Vào container
+docker exec -it app_dev bash
+
+# Clear cache
+php artisan route:clear
+php artisan config:clear
+php artisan cache:clear
+
+# Migration
+php artisan migrate
+
+# Xem routes
+php artisan route:list
 ```
 
-2. Tạo nhánh mới cho tính năng của bạn:
+## 🐛 Sửa Lỗi Thường Gặp
+
+### 1. Màn hình trắng
 ```bash
-git checkout -b feature/ten-tinh-nang
+# Kiểm tra container Vite
+docker logs noteurgoals_vite
+
+# Restart nếu cần
+docker-compose -f docker-compose.dev.yml restart vite
 ```
 
-3. Sau khi hoàn thành công việc:
+### 2. Route không tìm thấy
 ```bash
-git add .
-git commit -m "Mô tả thay đổi"
-git push origin feature/ten-tinh-nang
+docker exec -it app_dev bash
+php artisan route:clear
+php artisan ziggy:generate
 ```
 
-4. Tạo Pull Request trên GitHub
+### 3. Lỗi database
+- Kiểm tra thông tin database trong `docker-compose.dev.yml`
+- Đảm bảo kết nối internet để truy cập remote database
 
-## Lưu Ý Quan Trọng
+### 4. Container không chạy
+```bash
+# Xem logs để debug
+docker-compose -f docker-compose.dev.yml logs app_dev
+docker-compose -f docker-compose.dev.yml logs nginx
+docker-compose -f docker-compose.dev.yml logs vite
+```
 
-- File `docker-compose.yml` đã được cấu hình sẵn và sẽ tự động tạo file `.env` khi container khởi động
-- Không cần tạo hoặc chỉnh sửa file `.env` thủ công
-- Các biến môi trường đã được cấu hình trong `docker-compose.yml`
-- Database đã được cấu hình sẵn và kết nối đến remote server
-- File upload sẽ được lưu trữ trên cloud storage (AWS S3/Google Cloud Storage) hoặc hosting tùy theo môi trường
+## 📁 Cấu Trúc Project
 
-## Các Vấn Đề Thường Gặp
+```
+├── src/                        # Laravel application
+│   ├── app/Http/Controllers/   # Controllers
+│   ├── resources/js/           # React components
+│   ├── routes/                 # Routes định nghĩa
+│   └── database/              # Migration & models
+├── docker-compose.yml         # Production setup
+├── docker-compose.dev.yml     # Development setup
+├── php/Dockerfile            # Production PHP image
+└── php/Dockerfile.dev        # Development PHP image
+```
 
-- Nếu gặp lỗi về quyền truy cập, chạy lệnh:
-  ```bash
-  docker-compose exec app chown -R www-data:www-data /var/www
-  ```
-- Nếu cần build lại containers:
-  ```bash
-  docker-compose down
-  docker-compose up -d --build
-  ```
+## 🚀 Development Workflow
 
-## Thông Tin Liên Hệ
-- Project Manager: [Thông tin liên hệ]
-- Technical Lead: [Thông tin liên hệ]
-- DevOps: [Thông tin liên hệ]
+1. **Start containers**: `docker-compose -f docker-compose.dev.yml up -d`
+2. **Tạo admin user** (lần đầu tiên)
+3. **Truy cập**: `http://localhost:8000/login`
+4. **Edit code**: Thay đổi trong `src/` sẽ tự động reload
+5. **Debug**: Xem logs container nếu có lỗi
+
+## ⚡ Hot Reload
+
+- **PHP**: Tự động reload khi sửa file `.php`
+- **React**: Vite dev server tự động reload khi sửa file `.jsx`
+- **Styles**: CSS/Tailwind tự động compile
+
+## 📞 Hỗ Trợ
+
+- **Lỗi kỹ thuật**: Xem phần Sửa Lỗi Thường Gặp
+- **Feature mới**: Tạo GitHub issue
+- **Database**: Remote MySQL đã được cấu hình sẵn
+
+---
+
+**Lưu ý**: Đây là admin backend. Frontend user ở repository riêng.

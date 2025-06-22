@@ -13,7 +13,7 @@ class MilestoneController extends Controller
 {
     public function index(Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $milestones = $goal->milestones()->orderBy('deadline')->get();
@@ -22,7 +22,7 @@ class MilestoneController extends Controller
 
     public function store(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -47,7 +47,7 @@ class MilestoneController extends Controller
 
     public function show(Milestone $milestone)
     {
-        if ($milestone->goal->user_id !== Auth::id()) {
+        if ($milestone->goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         return response()->json($milestone);
@@ -55,7 +55,7 @@ class MilestoneController extends Controller
 
     public function update(Request $request, Milestone $milestone)
     {
-        if ($milestone->goal->user_id !== Auth::id()) {
+        if ($milestone->goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -71,15 +71,24 @@ class MilestoneController extends Controller
 
         $milestone->update($request->only(['title', 'deadline', 'is_completed']));
 
+        // If milestone completion status changed, update goal status
+        if ($request->has('is_completed')) {
+            $milestone->goal->updateStatus();
+        }
+
         return response()->json(['message' => 'Milestone updated', 'milestone' => $milestone]);
     }
 
     public function destroy(Milestone $milestone)
     {
-        if ($milestone->goal->user_id !== Auth::id()) {
+        if ($milestone->goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $milestone->delete();
+
+        // Update goal status after milestone deletion
+        $milestone->goal->updateStatus();
+
         return response()->json(['message' => 'Milestone deleted']);
     }
 }
