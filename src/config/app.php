@@ -127,10 +127,12 @@ return [
     // Laravel\Socialite\SocialiteServiceProvider::class,
     // ],
 
-    // // Thêm vào mảng 'aliases' trước 'maintenance' 
+    // // Thêm vào mảng 'aliases' trước 'maintenance'
     // 'aliases' => [
     // // Các aliases khác...
     // 'Socialite' => Laravel\Socialite\Facades\Socialite::class,
     // ],
+
+    'admin_domain' => env('ADMIN_DOMAIN', 'admin.localhost'),
 
 ];
