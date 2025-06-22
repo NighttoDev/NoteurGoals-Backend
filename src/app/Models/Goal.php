@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Goal extends Model
 {
+    protected $table = 'Goals';
+    protected $primaryKey = 'goal_id';
+    public $timestamps = false;
+
     protected $fillable = [
         'user_id',
         'title',
