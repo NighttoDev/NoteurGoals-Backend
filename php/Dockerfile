@@ -1,36 +1,33 @@
-FROM php:8.2-fpm
+FROM php:8.2-fpm-alpine
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
+    $PHPIZE_DEPS \
+    zip \
+    unzip \
     git \
     curl \
     libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip
-
-# Clear cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+    libzip-dev \
+    mysql-client \
+    oniguruma-dev \
+    procps \
+    bash
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+RUN docker-php-ext-install pdo_mysql mbstring zip exif pcntl gd
 
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set working directory
+# Ensure the application directory exists
 WORKDIR /var/www
 
-# Copy existing application directory
-COPY . /var/www
-
-# Change ownership of our applications
+# Thay đổi quyền sở hữu thư mục
 RUN chown -R www-data:www-data /var/www
 
-# Change current user to www-data
-USER www-data
-
-# Expose port 9000 and start php-fpm server
+# Expose port 9000
 EXPOSE 9000
-CMD ["php-fpm"] 
+
+# Đảm bảo PHP-FPM chạy trong foreground để container không tự tắt
+CMD ["php-fpm", "-F"]
