@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Auth\AdminAuthController;
+use App\Http\Controllers\AdminController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -37,3 +39,16 @@ Route::get('/status', function () {
 });
 
 require __DIR__.'/auth.php';
+
+// Admin Routes
+Route::prefix('admin')->group(function () {
+    Route::middleware('guest')->group(function () {
+        Route::get('/login', [AdminAuthController::class, 'showLoginForm'])->name('admin.login');
+        Route::post('/login', [AdminAuthController::class, 'login'])->name('admin.login.post');
+    });
+
+    Route::middleware(['auth', 'admin'])->group(function () {
+        Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+        Route::post('/logout', [AdminAuthController::class, 'logout'])->name('admin.logout');
+    });
+});
