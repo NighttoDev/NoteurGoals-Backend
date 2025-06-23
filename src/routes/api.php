@@ -5,6 +5,8 @@ use App\Http\Controllers\Auth\AuthController;
 
 // Các routes công khai - không yêu cầu xác thực
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
+Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
@@ -15,14 +17,14 @@ Route::prefix('auth')->group(function () {
     Route::middleware(['web'])->group(function () {
         Route::get('/google/url', [AuthController::class, 'getGoogleAuthUrl']);
         Route::get('/facebook/url', [AuthController::class, 'getFacebookAuthUrl']);
-        Route::get('/google/callback', [AuthController::class, 'handleGoogleCallback']);
-        Route::get('/facebook/callback', [AuthController::class, 'handleFacebookCallback']);
+        // Route::get('/google/callback', [AuthController::class, 'handleGoogleCallback']);
+        // Route::get('/facebook/callback', [AuthController::class, 'handleFacebookCallback']);
     });
     
-    // Các routes khác không cần session
-    Route::post('/social-login', [AuthController::class, 'socialLogin']);
-    Route::post('/google-id-token', [AuthController::class, 'googleIdTokenLogin']);
-    Route::post('/social-login-simple', [AuthController::class, 'simpleSocialLogin']);
+    // // Các routes khác không cần session
+    // Route::post('/social-login', [AuthController::class, 'socialLogin']);
+    // Route::post('/google-id-token', [AuthController::class, 'googleIdTokenLogin']);
+    // Route::post('/social-login-simple', [AuthController::class, 'simpleSocialLogin']);
 });
 
 // Routes yêu cầu xác thực
