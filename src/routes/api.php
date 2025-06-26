@@ -17,14 +17,8 @@ Route::prefix('auth')->group(function () {
     Route::middleware(['web'])->group(function () {
         Route::get('/google/url', [AuthController::class, 'getGoogleAuthUrl']);
         Route::get('/facebook/url', [AuthController::class, 'getFacebookAuthUrl']);
-        // Route::get('/google/callback', [AuthController::class, 'handleGoogleCallback']);
-        // Route::get('/facebook/callback', [AuthController::class, 'handleFacebookCallback']);
     });
     
-    // // Các routes khác không cần session
-    // Route::post('/social-login', [AuthController::class, 'socialLogin']);
-    // Route::post('/google-id-token', [AuthController::class, 'googleIdTokenLogin']);
-    // Route::post('/social-login-simple', [AuthController::class, 'simpleSocialLogin']);
 });
 
 // Routes yêu cầu xác thực
