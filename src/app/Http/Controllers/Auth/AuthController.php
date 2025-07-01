@@ -244,25 +244,14 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-        try {
-            $user = $request->user();
-            $user->load('profile');
-            
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'user' => $user
-                ]
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Lỗi lấy thông tin người dùng: ' . $e->getMessage());
-            
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi lấy thông tin người dùng',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
-        }
+       $user = $request->user()->load('profile'); // Load relationship nếu cần
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'user' => $user
+            ]
+        ]);
     }
 
     /**
@@ -378,266 +367,212 @@ class AuthController extends Controller
             ], 500);
         }
     }
-/**
- * Xử lý callback từ Google trực tiếp không qua Socialite
- */
-public function handleGoogleCallbackDirect(Request $request)
-{
-    try {
-        // Kiểm tra lỗi từ Google
-        if ($request->has('error')) {
-            Log::error('Google auth error: ' . $request->error_description);
-            return $this->redirectToFrontendWithError('Google auth error: ' . $request->error_description);
-        }
 
-        // Kiểm tra xem có code không
-        if (!$request->has('code')) {
-            return $this->redirectToFrontendWithError('No authorization code received');
-        }
+    /**
+     * Tạo URL xác thực Google và trả về cho frontend
+     */
+    // public function getGoogleAuthUrl()
+    // {
+    //     return response()->json([
+    //         'status' => 'error',
+    //         'message' => 'Google OAuth not implemented yet',
+    //         'url' => null
+    //     ], 501);
+    // }
 
-        // Lấy thông tin cấu hình
-        $clientId = config('services.google.client_id');
-        $clientSecret = config('services.google.client_secret');
-        $redirectUri = config('services.google.redirect');
+    // /**
+    //  * Get Facebook OAuth URL (commented out implementation)
+    //  */
+    // public function getFacebookAuthUrl()
+    // {
+    //     return response()->json([
+    //         'status' => 'error',
+    //         'message' => 'Facebook OAuth not implemented yet',
+    //         'url' => null
+    //     ], 501);
+    // }
 
-        // 1. Trao đổi code lấy access token
-        $tokenResponse = Http::post('https://oauth2.googleapis.com/token', [
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'code' => $request->code,
-            'redirect_uri' => $redirectUri,
-            'grant_type' => 'authorization_code'
-        ]);
-
-        if (!$tokenResponse->successful()) {
-            Log::error('Failed to exchange code for token', ['response' => $tokenResponse->body()]);
-            return $this->redirectToFrontendWithError('Failed to exchange code for token');
-        }
-
-        $tokenData = $tokenResponse->json();
-        $accessToken = $tokenData['access_token'];
-
-        // 2. Sử dụng access token để lấy thông tin người dùng
-        $userInfoResponse = Http::withToken($accessToken)
-            ->get('https://www.googleapis.com/oauth2/v3/userinfo');
-
-        if (!$userInfoResponse->successful()) {
-            Log::error('Failed to get user info', ['response' => $userInfoResponse->body()]);
-            return $this->redirectToFrontendWithError('Failed to get user info');
-        }
-
-        $userData = $userInfoResponse->json();
-
-        // 3. Tạo đối tượng user từ dữ liệu
-        $socialUser = new \stdClass();
-        $socialUser->id = $userData['sub'] ?? '';
-        $socialUser->email = $userData['email'] ?? '';
-        $socialUser->name = $userData['name'] ?? '';
-        $socialUser->avatar = $userData['picture'] ?? null;
-
-        // Kiểm tra email
-        if (empty($socialUser->email)) {
-            return $this->redirectToFrontendWithError('Email not provided in the Google account');
-        }
-
-        // QUAN TRỌNG: Gán các thuộc tính trực tiếp thay vì dùng closures
-        $socialUser->getEmail = $socialUser->email;
-        $socialUser->getName = $socialUser->name;
-        $socialUser->getAvatar = $socialUser->avatar;
-
-        // 4. Tìm hoặc tạo user - sử dụng phương thức fixed mới
-        $user = $this->findOrCreateUserFixed($socialUser, 'google');
-
-        // 5. Tạo token và thực hiện các bước đăng nhập
-        $token = $user->createToken('auth_token')->plainTextToken;
-        $user->last_login_at = now();
-        $user->save();
-        $user->load('profile');
-
-        // 6. Redirect về frontend với token
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-        $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
-        
-        return redirect()->to($redirectUrl);
-    } catch (\Exception $e) {
-        Log::error('Google callback direct error: ' . $e->getMessage());
-        return $this->redirectToFrontendWithError($e->getMessage());
-    }
-}
-
-/**
- * Xử lý callback từ Facebook trực tiếp không qua Socialite
- */
-public function handleFacebookCallbackDirect(Request $request)
-{
-    try {
-        // Kiểm tra lỗi từ Facebook
-        if ($request->has('error')) {
-            Log::error('Facebook auth error: ' . $request->error_description);
-            return $this->redirectToFrontendWithError('Facebook auth error: ' . $request->error_description);
-        }
-
-        // Kiểm tra xem có code không
-        if (!$request->has('code')) {
-            return $this->redirectToFrontendWithError('No authorization code received');
-        }
-
-        // Lấy thông tin cấu hình
-        $clientId = config('services.facebook.client_id');
-        $clientSecret = config('services.facebook.client_secret');
-        $redirectUri = config('services.facebook.redirect');
-
-        // 1. Trao đổi code lấy access token
-        $tokenResponse = Http::get('https://graph.facebook.com/v18.0/oauth/access_token', [
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'code' => $request->code,
-            'redirect_uri' => $redirectUri
-        ]);
-
-        if (!$tokenResponse->successful()) {
-            Log::error('Failed to exchange code for token', ['response' => $tokenResponse->body()]);
-            return $this->redirectToFrontendWithError('Failed to exchange code for token');
-        }
-
-        $tokenData = $tokenResponse->json();
-        $accessToken = $tokenData['access_token'];
-
-        // 2. Sử dụng access token để lấy thông tin người dùng
-        $userInfoResponse = Http::get('https://graph.facebook.com/v18.0/me', [
-            'fields' => 'id,name,email,picture.width(200)',
-            'access_token' => $accessToken
-        ]);
-
-        if (!$userInfoResponse->successful()) {
-            Log::error('Failed to get user info', ['response' => $userInfoResponse->body()]);
-            return $this->redirectToFrontendWithError('Failed to get user info');
-        }
-
-        $userData = $userInfoResponse->json();
-
-        // 3. Tạo đối tượng user từ dữ liệu
-        $socialUser = new \stdClass();
-        $socialUser->id = $userData['id'] ?? '';
-        $socialUser->email = $userData['email'] ?? '';
-        $socialUser->name = $userData['name'] ?? '';
-        $socialUser->avatar = isset($userData['picture']['data']['url']) ? $userData['picture']['data']['url'] : null;
-
-        // Kiểm tra email
-        if (empty($socialUser->email)) {
-            return $this->redirectToFrontendWithError('Facebook account does not have an email. Facebook may not provide email without email permission approval.');
-        }
-
-        // QUAN TRỌNG: Gán các thuộc tính trực tiếp thay vì dùng closures
-        $socialUser->getEmail = $socialUser->email;
-        $socialUser->getName = $socialUser->name;
-        $socialUser->getAvatar = $socialUser->avatar;
-
-        // 4. Tìm hoặc tạo user - sửa lại phương thức findOrCreateUser để xử lý đúng
-        $user = $this->findOrCreateUserFixed($socialUser, 'facebook');
-
-        // 5. Tạo token và thực hiện các bước đăng nhập
-        $token = $user->createToken('auth_token')->plainTextToken;
-        $user->last_login_at = now();
-        $user->save();
-        $user->load('profile');
-
-        // 6. Redirect về frontend với token
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-        $redirectUrl = "{$frontendUrl}/auth/social-callback?token={$token}&user_id={$user->user_id}";
-        
-        return redirect()->to($redirectUrl);
-    } catch (\Exception $e) {
-        Log::error('Facebook callback direct error: ' . $e->getMessage());
-        return $this->redirectToFrontendWithError($e->getMessage());
-    }
-}
-
-/**
- * Helper method để redirect về frontend với lỗi
- */
-private function redirectToFrontendWithError($errorMessage)
-{
-    $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-    $message = urlencode($errorMessage);
-    $redirectUrl = "{$frontendUrl}/auth/social-callback?error=1&message={$message}";
-    return redirect()->to($redirectUrl);
-}
-
-/**
- * Phiên bản sửa đổi của findOrCreateUser để xử lý cả thuộc tính và phương thức
- */
-private function findOrCreateUserFixed($socialUser, $provider)
-{
-    // Bắt đầu transaction
-    DB::beginTransaction();
-    
-    try {
-        // Lấy email từ thuộc tính hoặc phương thức
-        $email = null;
-        if (method_exists($socialUser, 'getEmail')) {
-            $email = $socialUser->getEmail();
-        } elseif (is_callable([$socialUser, 'getEmail'])) {
-            $email = $socialUser->getEmail();
-        } elseif (property_exists($socialUser, 'email')) {
-            $email = $socialUser->email;
-        } elseif (isset($socialUser->email)) {
-            $email = $socialUser->email;
-        }
-        
-        if (!$email) {
-            throw new \Exception('Không thể lấy email từ tài khoản xã hội');
-        }
-        
-        // Tìm user theo email
-        $user = User::where('email', $email)->first();
-        
-        if (!$user) {
-            // Lấy tên hiển thị
-            $displayName = null;
-            if (method_exists($socialUser, 'getName')) {
-                $displayName = $socialUser->getName();
-            } elseif (is_callable([$socialUser, 'getName'])) {
-                $displayName = $socialUser->getName();
-            } elseif (property_exists($socialUser, 'name')) {
-                $displayName = $socialUser->name;
-            } elseif (isset($socialUser->name)) {
-                $displayName = $socialUser->name;
-            } else {
-                $displayName = 'User';
+ /**
+     * Xử lý callback từ Google trực tiếp không qua Socialite
+     */
+    public function handleGoogleCallbackDirect(Request $request)
+    {
+        try {
+            if ($request->has('error')) {
+                throw new \Exception('Google auth error: ' . $request->error_description);
             }
-            
-            // Lấy avatar URL
-            $avatarUrl = null;
-            if (method_exists($socialUser, 'getAvatar')) {
-                $avatarUrl = $socialUser->getAvatar();
-            } elseif (is_callable([$socialUser, 'getAvatar'])) {
-                $avatarUrl = $socialUser->getAvatar();
-            } elseif (property_exists($socialUser, 'avatar')) {
-                $avatarUrl = $socialUser->avatar;
-            } elseif (isset($socialUser->avatar)) {
-                $avatarUrl = $socialUser->avatar;
+            if (!$request->has('code')) {
+                throw new \Exception('No authorization code received from Google');
             }
+
+            // 1. Trao đổi code lấy access token
+            $tokenData = $this->exchangeCodeForToken('google', $request->code);
             
-            // Tạo user mới
-            $user = User::create([
-                'display_name' => $displayName,
-                'email' => $email,
-                'password_hash' => Hash::make(Str::random(16)),
-                'avatar_url' => $avatarUrl,
-                'registration_type' => $provider,
-                'status' => 'active'
+            // 2. Sử dụng access token để lấy thông tin người dùng
+            $userInfoResponse = Http::withToken($tokenData['access_token'])->get('https://www.googleapis.com/oauth2/v3/userinfo');
+            if (!$userInfoResponse->successful()) {
+                throw new \Exception('Failed to get user info from Google');
+            }
+            $userData = $userInfoResponse->json();
+
+            // 3. Chuẩn hóa dữ liệu người dùng
+            $socialUser = new \stdClass();
+            $socialUser->id = $userData['sub'] ?? null;
+            $socialUser->email = $userData['email'] ?? null;
+            $socialUser->name = $userData['name'] ?? 'Google User';
+            $socialUser->avatar = $userData['picture'] ?? null;
+
+            // 4. Xử lý đăng nhập hoặc đăng ký và redirect
+            return $this->processSocialLogin($socialUser, 'google');
+
+        } catch (\Exception $e) {
+            Log::error('Google callback direct error: ' . $e->getMessage());
+            return $this->redirectToFrontendWithError($e->getMessage());
+        }
+    }
+
+    /**
+     * Xử lý callback từ Facebook trực tiếp không qua Socialite
+     */
+    public function handleFacebookCallbackDirect(Request $request)
+    {
+        try {
+            if ($request->has('error')) {
+                throw new \Exception('Facebook auth error: ' . $request->error_description);
+            }
+            if (!$request->has('code')) {
+                throw new \Exception('No authorization code received from Facebook');
+            }
+
+            // 1. Trao đổi code lấy access token
+            $tokenData = $this->exchangeCodeForToken('facebook', $request->code);
+            
+            // 2. Sử dụng access token để lấy thông tin người dùng
+            $userInfoResponse = Http::get('https://graph.facebook.com/v18.0/me', [
+                'fields' => 'id,name,email,picture.width(200)',
+                'access_token' => $tokenData['access_token']
             ]);
+            if (!$userInfoResponse->successful()) {
+                throw new \Exception('Failed to get user info from Facebook');
+            }
+            $userData = $userInfoResponse->json();
+
+            // 3. Chuẩn hóa dữ liệu người dùng
+            $socialUser = new \stdClass();
+            $socialUser->id = $userData['id'] ?? null;
+            $socialUser->email = $userData['email'] ?? null;
+            $socialUser->name = $userData['name'] ?? 'Facebook User';
+            $socialUser->avatar = $userData['picture']['data']['url'] ?? null;
+            
+            // 4. Xử lý đăng nhập hoặc đăng ký và redirect
+            return $this->processSocialLogin($socialUser, 'facebook');
+
+        } catch (\Exception $e) {
+            Log::error('Facebook callback direct error: ' . $e->getMessage());
+            return $this->redirectToFrontendWithError($e->getMessage());
         }
-        
-        // Commit transaction
-        DB::commit();
-        
-        return $user;
-    } catch (\Exception $e) {
-        // Rollback nếu có lỗi
-        DB::rollBack();
-        throw $e;
     }
-}
+    
+    // TỐI ƯU: Tách hàm trao đổi code lấy token để tái sử dụng
+    private function exchangeCodeForToken(string $provider, string $code)
+    {
+        $config = config("services.{$provider}");
+        $url = '';
+        $params = [
+            'client_id' => $config['client_id'],
+            'client_secret' => $config['client_secret'],
+            'code' => $code,
+            'redirect_uri' => $config['redirect'],
+        ];
+
+        if ($provider === 'google') {
+            $url = 'https://oauth2.googleapis.com/token';
+            $params['grant_type'] = 'authorization_code';
+            $response = Http::asForm()->post($url, $params);
+        } elseif ($provider === 'facebook') {
+            $url = 'https://graph.facebook.com/v18.0/oauth/access_token';
+            $response = Http::get($url, $params);
+        } else {
+            throw new \Exception("Provider {$provider} is not supported.");
+        }
+
+        if (!$response->successful()) {
+            Log::error("Failed to exchange code for token with {$provider}", ['response' => $response->body()]);
+            throw new \Exception("Failed to get access token from {$provider}.");
+        }
+
+        return $response->json();
+    }
+
+    // TỐI ƯU: Tách logic xử lý social login chung
+    private function processSocialLogin(\stdClass $socialUser, string $provider)
+    {
+        if (empty($socialUser->email)) {
+            throw new \Exception("Email is not provided by {$provider}.");
+        }
+
+        // Tìm hoặc tạo user
+        $user = $this->findOrCreateUser($socialUser, $provider);
+
+        // Tạo token, cập nhật login time
+        $token = $user->createToken('auth_token')->plainTextToken;
+        $user->last_login_at = now();
+        $user->save();
+        $user->load('profile'); // Load profile để gửi về frontend
+
+        // TỐI ƯU QUAN TRỌNG: Gửi cả token và user_info về frontend
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+        $callbackPath = '/auth/social-callback';
+
+        // Mã hóa dữ liệu để an toàn trên URL
+        $encodedToken = base64_encode($token);
+        $encodedUser = base64_encode(json_encode($user));
+
+        $redirectUrl = "{$frontendUrl}{$callbackPath}?token={$encodedToken}&user={$encodedUser}";
+        
+        return redirect()->away($redirectUrl);
+    }
+    
+    // TỐI ƯU: Hàm findOrCreateUser được làm gọn hơn
+    private function findOrCreateUser(\stdClass $socialUser, string $provider)
+    {
+        return DB::transaction(function () use ($socialUser, $provider) {
+            $user = User::where('email', $socialUser->email)->first();
+            
+            if ($user) {
+                // Nếu user đã tồn tại, cập nhật avatar và loại đăng nhập nếu cần
+                if (!$user->avatar_url && $socialUser->avatar) {
+                    $user->avatar_url = $socialUser->avatar;
+                }
+                // Nếu user đăng ký bằng email trước đó, có thể cập nhật `registration_type`
+                // $user->registration_type = $user->registration_type . ',' . $provider;
+                $user->save();
+                return $user;
+            }
+
+            // Tạo user mới nếu chưa tồn tại
+            return User::create([
+                'display_name' => $socialUser->name,
+                'email' => $socialUser->email,
+                'password_hash' => Hash::make(Str::random(24)), // Mật khẩu ngẫu nhiên
+                'avatar_url' => $socialUser->avatar,
+                'registration_type' => $provider,
+                'status' => 'active', // Kích hoạt ngay lập tức
+                // 'email_verified_at' => now(), // Đánh dấu đã xác thực email
+            ]);
+        });
+    }
+
+    /**
+     * Helper method để redirect về frontend với lỗi
+     */
+    private function redirectToFrontendWithError($errorMessage)
+    {
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+        // TỐI ƯU: Gửi lỗi về trang login để hiển thị
+        $loginPath = '/login'; 
+        $message = urlencode($errorMessage);
+        $redirectUrl = "{$frontendUrl}{$loginPath}?error_social=1&message={$message}";
+        return redirect()->away($redirectUrl);
+    }
 }

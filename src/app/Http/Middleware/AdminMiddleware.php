@@ -4,22 +4,27 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use App\Models\Admin;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AdminMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
-        $user = $request->user();
-        
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        if (!Auth::check()) {
+            return redirect()->route('admin.login');
         }
 
-        $admin = Admin::where('user_id', $user->id)->first();
+        $user = Auth::user();
+        
+        // Kiểm tra user có trong bảng Admins không
+        $admin = \App\Models\Admin::where('user_id', $user->user_id)->first();
         
         if (!$admin) {
-            return response()->json(['message' => 'Forbidden'], 403);
+            Auth::logout();
+            return redirect()->route('admin.login')->withErrors([
+                'error' => 'You do not have admin privileges'
+            ]);
         }
 
         return $next($request);
