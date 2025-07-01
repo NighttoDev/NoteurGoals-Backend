@@ -6,3 +6,6 @@ q
 DB::select('SHOW TABLES');
 DB::select('SHOW TABLES');
 q
+DB::select('SHOW TABLES');
+uit
+quit
