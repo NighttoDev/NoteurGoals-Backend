@@ -119,12 +119,76 @@ function printTestResult($testName, $result, $expectedCode = null, $showResponse
 echo "🚀 Step 1: Creating authentication token...\n";
 echo "==========================================\n";
 
-$createTokenCommand = 'cd src && php artisan tinker --execute="
+// Function to execute artisan command cross-platform
+function executeArtisanCommand($command) {
+    $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    $srcPath = __DIR__ . DIRECTORY_SEPARATOR . 'src';
+    
+    if ($isWindows) {
+        $fullCommand = "cd /d \"$srcPath\" && php artisan $command";
+    } else {
+        $fullCommand = "cd \"$srcPath\" && php artisan $command";
+    }
+    
+    echo "🔧 DEBUG - OS: " . ($isWindows ? 'Windows' : 'Unix-like') . "\n";
+    echo "🔧 DEBUG - Source path: $srcPath\n";
+    echo "🔧 DEBUG - Full command: $fullCommand\n";
+    
+    $result = shell_exec($fullCommand);
+    echo "🔧 DEBUG - Raw command output: " . ($result ?: 'NULL/EMPTY') . "\n";
+    echo "🔧 DEBUG - Command output length: " . strlen($result ?: '') . "\n";
+    
+    return $result;
+}
+
+// Function to clean token result from shell output
+function cleanTokenResult($result) {
+    echo "🔧 DEBUG - cleanTokenResult input: '" . ($result ?: 'NULL') . "'\n";
+    
+    if (!$result) return null;
+    
+    // Remove common shell prompts and extra whitespace
+    $cleaned = trim($result);
+    echo "🔧 DEBUG - After trim: '$cleaned'\n";
+    
+    // Remove common prompt patterns (generic approach)
+    $patterns = [
+        '/^.*\$\s*/',           // Unix prompts ending with $
+        '/^.*%\s*/',            // Zsh prompts ending with %
+        '/^.*>\s*/',            // Windows prompts ending with >
+        '/^.*#\s*/',            // Root prompts ending with #
+        '/\s+$/',               // Trailing whitespace
+        '/^\s+/',               // Leading whitespace
+    ];
+    
+    foreach ($patterns as $pattern) {
+        $beforeClean = $cleaned;
+        $cleaned = preg_replace($pattern, '', $cleaned);
+        if ($beforeClean !== $cleaned) {
+            echo "🔧 DEBUG - Pattern '$pattern' matched, cleaned to: '$cleaned'\n";
+        }
+    }
+    
+    // Extract token pattern (Laravel Sanctum tokens are typically long alphanumeric with |)
+    if (preg_match('/\d+\|[a-zA-Z0-9]{40,}/', $cleaned, $matches)) {
+        echo "🔧 DEBUG - Token pattern matched: {$matches[0]}\n";
+        return $matches[0];
+    }
+    
+    // If no specific pattern matches, return cleaned result if it looks like a token
+    if (strlen($cleaned) > 20 && !strpos($cleaned, 'ERROR') && !strpos($cleaned, 'NOT_FOUND')) {
+        echo "🔧 DEBUG - Using cleaned result as token: '$cleaned'\n";
+        return $cleaned;
+    }
+    
+    echo "🔧 DEBUG - No valid token found\n";
+    return null;
+}
+
+$tinkerCommand = 'tinker --execute="
 \$user = \App\Models\User::where(\'email\', \'tranvietkhoa2004@gmail.com\')->first();
 if (\$user) {
-    // Delete old tokens
     \$user->tokens()->delete();
-    // Create new token
     \$token = \$user->createToken(\'comprehensive_test_token\')->plainTextToken;
     echo \$token;
 } else {
@@ -132,13 +196,13 @@ if (\$user) {
 }
 "';
 
-$tokenResult = shell_exec($createTokenCommand);
-$authToken = trim(str_replace(['khoatran@192 src %', 'khoatran@192 NoteurGoals-Backend-1 %'], '', $tokenResult));
+$tokenResult = executeArtisanCommand($tinkerCommand);
+$authToken = cleanTokenResult($tokenResult);
 
-if (!$authToken || $authToken === 'USER_NOT_FOUND' || strlen($authToken) < 10) {
+if (!$authToken || strpos($tokenResult, 'USER_NOT_FOUND') !== false) {
     echo "❌ Failed to get existing user token. Creating test user...\n";
     
-    $createUserCommand = 'cd src && php artisan tinker --execute="
+    $createUserCommand = 'tinker --execute="
     try {
         \$user = \App\Models\User::firstOrCreate(
             [\'email\' => \'testapi@example.com\'],
@@ -158,14 +222,93 @@ if (!$authToken || $authToken === 'USER_NOT_FOUND' || strlen($authToken) < 10) {
     }
     "';
     
-    $tokenResult = shell_exec($createUserCommand);
-    $authToken = trim(str_replace(['khoatran@192 src %', 'khoatran@192 NoteurGoals-Backend-1 %'], '', $tokenResult));
+    $tokenResult = executeArtisanCommand($createUserCommand);
+    $authToken = cleanTokenResult($tokenResult);
+}
+
+// Alternative method for Windows if tinker fails
+if (!$authToken && strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+    echo "⚠️  Trying alternative method for Windows...\n";
+    
+    // Try using file-based approach
+    $tempFile = __DIR__ . DIRECTORY_SEPARATOR . 'temp_token_script.php';
+    $tokenScript = '<?php
+require_once __DIR__ . "/src/bootstrap/app.php";
+$app = require_once __DIR__ . "/src/bootstrap/app.php";
+
+try {
+    $user = App\\Models\\User::firstOrCreate(
+        ["email" => "testapi@example.com"],
+        [
+            "display_name" => "Comprehensive API Test User",
+            "password_hash" => Illuminate\\Support\\Facades\\Hash::make("password123"),
+            "registration_type" => "email",
+            "status" => "active",
+            "email_verified_at" => now()
+        ]
+    );
+    $user->tokens()->delete();
+    $token = $user->createToken("comprehensive_test_token")->plainTextToken;
+    echo $token;
+} catch (Exception $e) {
+    echo "ERROR: " . $e->getMessage();
+}
+?>';
+    
+    file_put_contents($tempFile, $tokenScript);
+    $result = shell_exec("php \"$tempFile\"");
+    unlink($tempFile);
+    
+    echo "🔧 DEBUG - Alternative method result: " . ($result ?: 'NULL') . "\n";
+    $authToken = cleanTokenResult($result);
+}
+
+// Final fallback: Try API login
+if (!$authToken) {
+    echo "⚠️  Trying API login as final fallback...\n";
+    
+    // First try to register a user via API
+    $registerData = [
+        'display_name' => 'API Test User',
+        'email' => 'apitest@example.com',
+        'password' => 'password123',
+        'password_confirmation' => 'password123'
+    ];
+    
+    $registerResult = makeAPIRequest($baseUrl . '/register', 'POST', $registerData);
+    echo "🔧 DEBUG - Register result: HTTP {$registerResult['code']}\n";
+    
+    // Then try to login
+    $loginData = [
+        'email' => 'apitest@example.com',
+        'password' => 'password123'
+    ];
+    
+    $loginResult = makeAPIRequest($baseUrl . '/login', 'POST', $loginData);
+    echo "🔧 DEBUG - Login result: HTTP {$loginResult['code']}\n";
+    
+    if ($loginResult['success']) {
+        $loginResponse = json_decode($loginResult['response'], true);
+        if (isset($loginResponse['token'])) {
+            $authToken = $loginResponse['token'];
+            echo "✅ Got token via API login: " . substr($authToken, 0, 20) . "...\n";
+        } elseif (isset($loginResponse['data']['token'])) {
+            $authToken = $loginResponse['data']['token'];
+            echo "✅ Got token via API login: " . substr($authToken, 0, 20) . "...\n";
+        }
+    }
 }
 
 if ($authToken && strlen($authToken) > 10 && !strpos($authToken, 'ERROR')) {
-    echo "✅ Authentication token created: " . substr($authToken, 0, 20) . "...\n";
+    echo "✅ Authentication token ready: " . substr($authToken, 0, 20) . "...\n";
 } else {
-    echo "❌ Failed to create authentication token: $authToken\n";
+    echo "❌ All authentication methods failed.\n";
+    echo "🔧 DEBUG - Final token value: " . ($authToken ?: 'NULL') . "\n";
+    echo "📋 Troubleshooting steps:\n";
+    echo "   1. Check if Laravel server is running: php artisan serve\n";
+    echo "   2. Check database connection in src/.env\n";
+    echo "   3. Run: cd src && php artisan migrate\n";
+    echo "   4. Check Laravel logs: src/storage/logs/laravel.log\n";
     echo "Will test public endpoints only...\n";
     $authToken = null;
 }
