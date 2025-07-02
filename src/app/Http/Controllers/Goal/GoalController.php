@@ -57,7 +57,7 @@ class GoalController extends Controller
         }
 
         $goal = Goal::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::user()->user_id,
             'title' => $request->title,
             'description' => $request->description,
             'start_date' => $request->start_date,
@@ -67,14 +67,14 @@ class GoalController extends Controller
 
         // Create initial progress
         GoalProgress::create([
-            'goal_id' => $goal->id,
+            'goal_id' => $goal->goal_id,
             'progress_value' => 0
         ]);
 
         // Create share settings if provided
         if ($request->has('share_type')) {
             GoalShare::create([
-                'goal_id' => $goal->id,
+                'goal_id' => $goal->goal_id,
                 'share_type' => $request->share_type
             ]);
         }
@@ -105,7 +105,7 @@ class GoalController extends Controller
 
     public function update(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -132,7 +132,7 @@ class GoalController extends Controller
 
         if ($request->has('share_type')) {
             $goal->share()->updateOrCreate(
-                ['goal_id' => $goal->id],
+                ['goal_id' => $goal->goal_id],
                 ['share_type' => $request->share_type]
             );
         }
@@ -145,7 +145,7 @@ class GoalController extends Controller
 
     public function destroy(Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -158,12 +158,12 @@ class GoalController extends Controller
 
     public function addCollaborator(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'required|exists:Users,user_id',
             'role' => 'required|in:owner,member'
         ]);
 
@@ -179,7 +179,7 @@ class GoalController extends Controller
         }
 
         $collaboration = GoalCollaboration::create([
-            'goal_id' => $goal->id,
+            'goal_id' => $goal->goal_id,
             'user_id' => $request->user_id,
             'role' => $request->role
         ]);
@@ -192,7 +192,7 @@ class GoalController extends Controller
 
     public function removeCollaborator(Goal $goal, $userId)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -205,7 +205,7 @@ class GoalController extends Controller
 
     public function updateShareSettings(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::id()) {
+        if ($goal->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -218,7 +218,7 @@ class GoalController extends Controller
         }
 
         $goal->share()->updateOrCreate(
-            ['goal_id' => $goal->id],
+            ['goal_id' => $goal->goal_id],
             ['share_type' => $request->share_type]
         );
 

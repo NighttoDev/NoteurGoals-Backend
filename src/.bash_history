@@ -6,8 +6,6 @@ q
 exit
 php artisan tinker
 exit
+
+php artisan tinker
 composer install
-composer config --global process-timeout 900
-composer install
-docker-compose down
-composer require fruitcake/laravel-cors
