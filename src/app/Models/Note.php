@@ -65,7 +65,8 @@ class Note extends Model
     public function isLinkedToGoal($goalId = null)
     {
         if ($goalId) {
-            return $this->goals()->where('goal_id', $goalId)->exists();
+            // Sửa ở đây: Chỉ định rõ bảng 'Goals' cho cột 'goal_id'
+            return $this->goals()->where('Goals.goal_id', $goalId)->exists();
         }
         return $this->goals()->exists();
     }
@@ -73,7 +74,8 @@ class Note extends Model
     public function isLinkedToMilestone($milestoneId = null)
     {
         if ($milestoneId) {
-            return $this->milestones()->where('milestone_id', $milestoneId)->exists();
+            // Sửa tương tự: Chỉ định rõ bảng 'Milestones'
+            return $this->milestones()->where('Milestones.milestone_id', $milestoneId)->exists();
         }
         return $this->milestones()->exists();
     }

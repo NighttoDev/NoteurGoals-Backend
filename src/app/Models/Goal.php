@@ -70,9 +70,10 @@ class Goal extends Model
         return $this->hasOne(GoalShare::class, 'goal_id', 'goal_id');
     }
 
-    public function collaborations()
+    function collaborations()
     {
-        return $this->hasMany(GoalCollaboration::class, 'goal_id', 'goal_id');
+        // THÊM .with('user') vào cuối dòng này.
+        return $this->hasMany(GoalCollaboration::class, 'goal_id', 'goal_id')->with('user');
     }
 
     // Helper methods
