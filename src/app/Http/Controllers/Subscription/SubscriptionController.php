@@ -9,45 +9,75 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
+    /**
+     * Lấy tất cả các gói đăng ký có sẵn.
+     * GET /api/subscriptions/plans
+     */
     public function plans()
     {
         return response()->json(SubscriptionPlan::all());
     }
 
-    public function mySubscriptions()
+    // *** MỚI: Thêm phương thức show() bị thiếu ***
+    /**
+     * Lấy thông tin chi tiết của một gói đăng ký.
+     * GET /api/subscriptions/plans/{planId}
+     */
+    public function show($planId)
     {
-        $subs = Auth::user()->subscriptions()->with('plan')->get();
-        return response()->json($subs);
-    }
+        try {
+            // Tìm plan theo ID, nếu không thấy sẽ tự động báo lỗi
+            $plan = SubscriptionPlan::findOrFail($planId); 
+            
+            return response()->json($plan);
 
-    public function subscribe(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'plan_id' => 'required|exists:SubscriptionPlans,plan_id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // Trả về lỗi 404 chuẩn nếu không tìm thấy plan
+            return response()->json(['message' => 'Subscription plan not found.'], 404);
+        } catch (\Exception $e) {
+            // Ghi lại các lỗi bất ngờ khác
+            Log::error('Error in SubscriptionController@show for plan ID ' . $planId . ': ' . $e->getMessage());
+            return response()->json(['message' => 'An internal server error occurred.'], 500);
         }
-
-        $plan = SubscriptionPlan::find($request->plan_id);
-        $start = Carbon::today();
-        $end = Carbon::today()->addMonths($plan->duration);
-
-        $subscription = UserSubscription::create([
-            'user_id' => Auth::user()->user_id,
-            'plan_id' => $plan->plan_id,
-            'start_date' => $start,
-            'end_date' => $end,
-            'payment_status' => 'active',
-        ]);
-
-        return response()->json(['message' => 'Subscribed successfully', 'subscription' => $subscription], 201);
     }
 
+
+    /**
+     * Lấy gói đăng ký đang hoạt động hiện tại của người dùng.
+     * GET /api/subscriptions/my-current
+     */
+    public function myCurrentSubscription()
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            $subscription = UserSubscription::where('user_id', $user->user_id)
+                ->where('payment_status', 'active')
+                ->with('plan')
+                ->latest('created_at')
+                ->first();
+
+            return response()->json($subscription);
+
+        } catch (\Exception $e) {
+            Log::error('Error in myCurrentSubscription: ' . $e->getMessage());
+            return response()->json(['message' => 'An internal server error occurred.'], 500);
+        }
+    }
+
+
+    /**
+     * Hủy một gói đăng ký.
+     * POST /api/subscriptions/cancel/{subscription}
+     */
     public function cancel(UserSubscription $subscription)
     {
         if ($subscription->user_id !== Auth::user()->user_id) {
@@ -57,6 +87,8 @@ class SubscriptionController extends Controller
         $subscription->payment_status = 'cancelled';
         $subscription->save();
 
-        return response()->json(['message' => 'Subscription cancelled']);
+        $subscription->load('plan');
+        return response()->json(['message' => 'Subscription cancelled successfully.', 'subscription' => $subscription]);
     }
+
 }
