@@ -20,7 +20,7 @@ class AuthController extends Controller
     /**
      * Đăng ký người dùng mới với xác thực email
      */
-     public function register(Request $request)
+ public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'display_name' => 'required|string|max:100',
@@ -28,37 +28,28 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        // Trả về JSON lỗi tường minh nếu validation thất bại
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Dữ liệu không hợp lệ.',
-                'errors' => $validator->errors()
-            ], 422);
+            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
         }
 
         DB::beginTransaction();
         try {
-            // Xóa các tài khoản chưa xác thực có cùng email để người dùng có thể thử lại
-            User::where('email', $request->email)
-                ->where('status', 'unverified')
-                ->delete();
+            User::where('email', $request->email)->where('status', 'unverified')->delete();
 
-            // Tạo mã OTP
             $otp = strval(random_int(100000, 999999));
-
-            // Tạo User mới với status 'unverified'
             $user = User::create([
                 'display_name' => $request->display_name,
                 'email' => $request->email,
                 'password_hash' => Hash::make($request->password),
-                'registration_type' => 'email', // Luôn là 'email' cho luồng này
+                'registration_type' => 'email',
                 'status' => 'unverified',
                 'verification_token' => $otp,
             ]);
 
-            // Gửi email chứa mã OTP
-            $this->sendOtpEmail($user, $otp);
+            // Tái sử dụng hàm gửi email chung
+            $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
+            $line1 = "Cảm ơn bạn đã đăng ký. Mã xác thực của bạn là: {$otp}";
+            $this->sendOtpEmail($user, $subject, $line1);
 
             DB::commit();
 
@@ -71,17 +62,13 @@ class AuthController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Lỗi khi đăng ký (OTP Flow): ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Đã có lỗi xảy ra phía máy chủ, không thể hoàn tất đăng ký.'
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'Đã có lỗi xảy ra phía máy chủ, không thể hoàn tất đăng ký.'], 500);
         }
     }
-
     /**
      * [HOÀN CHỈNH] Xác thực email bằng OTP
      */
-    public function verifyEmail(Request $request)
+     public function verifyEmail(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email|exists:Users,email',
@@ -92,36 +79,25 @@ class AuthController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
         }
         
-        $user = User::where('email', $request->email)
-                    ->where('status', 'unverified')
-                    ->first();
+        $user = User::where('email', $request->email)->where('status', 'unverified')->first();
 
-        // Kiểm tra OTP có đúng không và có còn hiệu lực không (10 phút)
         if (!$user || $user->verification_token !== $request->otp || Carbon::parse($user->created_at)->addMinutes(10)->isPast()) {
             return response()->json(['status' => 'error', 'message' => 'Mã OTP không hợp lệ hoặc đã hết hạn.'], 400);
         }
 
-        // Kích hoạt tài khoản thành công
         $user->status = 'active';
         $user->verification_token = null;
-        // $user->email_verified_at = now();
         $user->save();
 
-        // Tạo token đăng nhập tự động
         $token = $user->createToken('auth_token')->plainTextToken;
-        $user->load('profile'); // Load thêm thông tin profile nếu cần
+        $user->load('profile');
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tài khoản đã được xác thực thành công!',
-            'data' => ['token' => $token, 'user' => $user]
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Tài khoản đã được xác thực thành công!', 'data' => ['token' => $token, 'user' => $user]]);
     }
-
     /**
      * [HOÀN CHỈNH] Gửi lại email xác thực
      */
-    public function resendVerificationEmail(Request $request)
+   public function resendVerificationEmail(Request $request)
     {
         $validator = Validator::make($request->all(), [ 'email' => 'required|email|exists:Users,email' ]);
         if ($validator->fails()) { return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422); }
@@ -134,10 +110,13 @@ class AuthController extends Controller
         try {
             $otp = strval(random_int(100000, 999999));
             $user->verification_token = $otp;
-            $user->created_at = now(); // Reset lại thời gian để tính giờ hết hạn OTP mới
+            $user->created_at = now();
             $user->save();
             
-            $this->sendOtpEmail($user, $otp);
+            // Tái sử dụng hàm gửi email chung
+            $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
+            $line1 = "Đây là mã xác thực mới của bạn: {$otp}";
+            $this->sendOtpEmail($user, $subject, $line1);
 
             return response()->json(['status' => 'success', 'message' => 'Một mã xác thực mới đã được gửi đến email của bạn.']);
         } catch (\Exception $e) {
@@ -146,21 +125,29 @@ class AuthController extends Controller
         }
     }
 
+
     /**
      * Hàm trợ giúp gửi email OTP
      */
-    private function sendOtpEmail(User $user, string $otp)
+    private function sendOtpEmail(User $user, string $subject, string $line1, string $line2 = null)
     {
-        $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
-        $message = "Xin chào {$user->display_name},\n\n"
-                 . "Cảm ơn bạn đã đăng ký. Mã xác thực của bạn là: {$otp}\n\n"
-                 . "Mã này sẽ hết hạn trong vòng 10 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n"
-                 . "Trân trọng,\n"
-                 . "Đội ngũ NoteurGoals";
+        $messageLines = ["Xin chào {$user->display_name},", "", $line1, ""];
+        if ($line2) {
+            $messageLines[] = $line2;
+            $messageLines[] = "";
+        }
+        $messageLines = array_merge($messageLines, ["Mã này sẽ hết hạn trong vòng 10 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.", "", "Trân trọng,", "Đội ngũ NoteurGoals"]);
+        $message = implode("\n", $messageLines);
         
-        Mail::raw($message, function ($mail) use ($user, $subject) {
-            $mail->to($user->email)->subject($subject);
-        });
+        try {
+            Mail::raw($message, function ($mail) use ($user, $subject) {
+                $mail->to($user->email)->subject($subject);
+            });
+        } catch (\Exception $e) {
+            Log::error("Lỗi gửi email OTP đến {$user->email}: " . $e->getMessage());
+            // Ném lại lỗi để transaction có thể rollback
+            throw $e;
+        }
     }
     /**
      * Đăng nhập người dùng
@@ -244,14 +231,8 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-       $user = $request->user()->load('profile'); // Load relationship nếu cần
-        
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'user' => $user
-            ]
-        ]);
+       $user = $request->user()->load('profile');
+       return response()->json(['status' => 'success', 'data' => ['user' => $user]]);
     }
 
     /**
@@ -284,40 +265,41 @@ class AuthController extends Controller
     public function forgotPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|exists:Users,email'
+            'email' => 'required|email|exists:Users,email',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Email không hợp lệ hoặc không tồn tại',
-                'errors' => $validator->errors()
-            ], 422);
+            return response()->json(['status' => 'error', 'message' => 'Email không tồn tại trong hệ thống.', 'errors' => $validator->errors()], 422);
         }
 
         try {
-            // Tạo mã reset token
-            $token = Str::random(60);
-            
             $user = User::where('email', $request->email)->first();
-            $user->reset_token = $token;
+            
+            $otp = strval(random_int(100000, 999999));
+            $resetToken = Str::random(60) . time();
+
+            $user->verification_token = $otp;
+            $user->reset_token = $resetToken;
+            $user->created_at = now();
             $user->save();
 
-            // TODO: Gửi email đặt lại mật khẩu
-            // Ở đây cần tích hợp với hệ thống email
+            // Tái sử dụng hàm gửi email chung với nội dung khác
+            $subject = "Mã OTP đặt lại mật khẩu NoteurGoals của bạn là {$otp}";
+            $line1 = "Bạn đã yêu cầu đặt lại mật khẩu. Mã xác thực của bạn là: {$otp}";
+            $line2 = "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.";
+            $this->sendOtpEmail($user, $subject, $line1, $line2);
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Đã gửi email hướng dẫn đặt lại mật khẩu'
+                'message' => 'Mã OTP để đặt lại mật khẩu đã được gửi đến email của bạn.',
+                'data' => [
+                    'reset_token' => $resetToken,
+                    'email' => $user->email,
+                ]
             ]);
         } catch (\Exception $e) {
             Log::error('Lỗi quên mật khẩu: ' . $e->getMessage());
-            
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi xử lý yêu cầu đặt lại mật khẩu',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra, không thể gửi email đặt lại mật khẩu.'], 500);
         }
     }
 
@@ -327,71 +309,37 @@ class AuthController extends Controller
     public function resetPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
+            'email' => 'required|email|exists:Users,email',
             'token' => 'required|string',
-            'password' => 'required|string|min:8|confirmed'
+            'otp' => 'required|string|min:6|max:6',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Dữ liệu không hợp lệ',
-                'errors' => $validator->errors()
-            ], 422);
+            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
         }
 
         try {
-            $user = User::where('reset_token', $request->token)->first();
+            $user = User::where('email', $request->email)
+                        ->where('reset_token', $request->token)
+                        ->first();
             
-            if (!$user) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Mã xác thực không hợp lệ hoặc đã hết hạn'
-                ], 400);
+            if (!$user || $user->verification_token !== $request->otp || Carbon::parse($user->created_at)->addMinutes(10)->isPast()) {
+                return response()->json(['status' => 'error', 'message' => 'Mã OTP hoặc token không hợp lệ, hoặc đã hết hạn.'], 400);
             }
 
             $user->password_hash = Hash::make($request->password);
             $user->reset_token = null;
+            $user->verification_token = null;
             $user->save();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Đặt lại mật khẩu thành công'
-            ]);
+            return response()->json(['status' => 'success', 'message' => 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay bây giờ.']);
         } catch (\Exception $e) {
             Log::error('Lỗi đặt lại mật khẩu: ' . $e->getMessage());
-            
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi đặt lại mật khẩu',
-                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra khi đặt lại mật khẩu.'], 500);
         }
     }
-
-    /**
-     * Tạo URL xác thực Google và trả về cho frontend
-     */
-    // public function getGoogleAuthUrl()
-    // {
-    //     return response()->json([
-    //         'status' => 'error',
-    //         'message' => 'Google OAuth not implemented yet',
-    //         'url' => null
-    //     ], 501);
-    // }
-
-    // /**
-    //  * Get Facebook OAuth URL (commented out implementation)
-    //  */
-    // public function getFacebookAuthUrl()
-    // {
-    //     return response()->json([
-    //         'status' => 'error',
-    //         'message' => 'Facebook OAuth not implemented yet',
-    //         'url' => null
-    //     ], 501);
-    // }
-
+    
  /**
      * Xử lý callback từ Google trực tiếp không qua Socialite
      */
@@ -521,7 +469,7 @@ class AuthController extends Controller
         $user->load('profile'); // Load profile để gửi về frontend
 
         // TỐI ƯU QUAN TRỌNG: Gửi cả token và user_info về frontend
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
         $callbackPath = '/auth/social-callback';
 
         // Mã hóa dữ liệu để an toàn trên URL
@@ -568,7 +516,7 @@ class AuthController extends Controller
      */
     private function redirectToFrontendWithError($errorMessage)
     {
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
         // TỐI ƯU: Gửi lỗi về trang login để hiển thị
         $loginPath = '/login'; 
         $message = urlencode($errorMessage);

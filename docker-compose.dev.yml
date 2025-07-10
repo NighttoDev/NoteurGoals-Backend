@@ -22,7 +22,7 @@ services:
     container_name: noteurgoals_vite
     working_dir: /var/www
     ports:
-      - "5173:5173"
+      - "5174:5174"
     volumes:
       - ./src:/var/www
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
@@ -49,7 +49,7 @@ services:
       - DB_DATABASE=NoteManegementSystem
       - DB_USERNAME=noteurgo
       - DB_PASSWORD=b29oWG7)Ve]Ve8
-      - VITE_DEV_SERVER_URL=http://localhost:5173
+      - VITE_DEV_SERVER_URL=http://localhost:5174
     networks:
       - app-network
 
