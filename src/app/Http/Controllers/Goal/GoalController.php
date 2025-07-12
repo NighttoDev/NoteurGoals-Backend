@@ -257,7 +257,7 @@ class GoalController extends Controller
         // Lấy thông tin chi tiết của các cộng tác viên.
         // Dùng alias 'id' để frontend dễ dàng xử lý (key={collaborator.id})
         $collaborators = User::whereIn('user_id', $collaboratorIds)
-            ->select('user_id as id', 'name', 'email', 'avatar')
+            ->select('user_id as id', 'display_name', 'email', 'avatar')
             ->get();
 
         return response()->json($collaborators);

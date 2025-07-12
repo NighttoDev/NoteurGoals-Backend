@@ -33,7 +33,7 @@ class FriendshipController extends Controller
             return [
                 'friendship_id' => $friendship->friendship_id,
                 'id' => $friendUser->user_id,
-                'name' => $friendUser->name,
+                'display_name' => $friendUser->display_name,
                 'email' => $friendUser->email,
                 'avatar' => $friendUser->avatar,
             ];
@@ -59,7 +59,7 @@ class FriendshipController extends Controller
             return [
                 'friendship_id' => $friendship->friendship_id,
                 'id' => $requestUser->user_id,
-                'name' => $requestUser->name,
+                'display_name' => $requestUser->display_name,
                 'email' => $requestUser->email,
                 'avatar' => $requestUser->avatar,
                 'status' => $status,
