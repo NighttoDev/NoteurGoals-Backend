@@ -65,7 +65,7 @@ class Note extends Model
     public function isLinkedToGoal($goalId = null)
     {
         if ($goalId) {
-            return $this->goals()->where('goal_id', $goalId)->exists();
+            return $this->goals()->where('Goals.goal_id', $goalId)->exists();
         }
         return $this->goals()->exists();
     }
