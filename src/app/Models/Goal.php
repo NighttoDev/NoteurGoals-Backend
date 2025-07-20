@@ -72,7 +72,7 @@ class Goal extends Model
 
     public function collaborations()
     {
-        return $this->hasMany(GoalCollaboration::class, 'goal_id', 'goal_id');
+        return $this->hasMany(GoalCollaboration::class, 'goal_id', 'goal_id')->with('user');
     }
 
     // Helper methods

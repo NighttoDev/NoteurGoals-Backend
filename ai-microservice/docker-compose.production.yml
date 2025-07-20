@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-goal-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=False
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - SECRET_KEY=${SECRET_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LARAVEL_API_URL=${LARAVEL_API_URL}
+      - LARAVEL_API_TOKEN=${LARAVEL_API_TOKEN}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./models:/app/models
+      - ./training_data:/app/training_data
+      - ./logs:/var/log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ai-network
+
+networks:
+  ai-network:
+    driver: bridge
+
+# Volumes for model persistence
+volumes:
+  model_data:
+    driver: local
+  training_data:
+    driver: local 
