@@ -231,8 +231,14 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-       $user = $request->user()->load('profile');
-       return response()->json(['status' => 'success', 'data' => ['user' => $user]]);
+       $user = $request->user()->load('profile'); // Load relationship nếu cần
+        
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'user' => $user
+            ]
+        ]);
     }
 
     /**
@@ -339,7 +345,33 @@ class AuthController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra khi đặt lại mật khẩu.'], 500);
         }
     }
-    
+
+
+    /**
+     * Tạo URL xác thực Google và trả về cho frontend
+     */
+    // public function getGoogleAuthUrl()
+    // {
+    //     return response()->json([
+    //         'status' => 'error',
+    //         'message' => 'Google OAuth not implemented yet',
+    //         'url' => null
+    //     ], 501);
+    // }
+
+    // /**
+    //  * Get Facebook OAuth URL (commented out implementation)
+    //  */
+    // public function getFacebookAuthUrl()
+    // {
+    //     return response()->json([
+    //         'status' => 'error',
+    //         'message' => 'Facebook OAuth not implemented yet',
+    //         'url' => null
+    //     ], 501);
+    // }
+
+
  /**
      * Xử lý callback từ Google trực tiếp không qua Socialite
      */
@@ -362,7 +394,6 @@ class AuthController extends Controller
                 throw new \Exception('Failed to get user info from Google');
             }
             $userData = $userInfoResponse->json();
-
             // 3. Chuẩn hóa dữ liệu người dùng
             $socialUser = new \stdClass();
             $socialUser->id = $userData['sub'] ?? null;
@@ -372,7 +403,6 @@ class AuthController extends Controller
 
             // 4. Xử lý đăng nhập hoặc đăng ký và redirect
             return $this->processSocialLogin($socialUser, 'google');
-
         } catch (\Exception $e) {
             Log::error('Google callback direct error: ' . $e->getMessage());
             return $this->redirectToFrontendWithError($e->getMessage());
@@ -469,7 +499,7 @@ class AuthController extends Controller
         $user->load('profile'); // Load profile để gửi về frontend
 
         // TỐI ƯU QUAN TRỌNG: Gửi cả token và user_info về frontend
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
         $callbackPath = '/auth/social-callback';
 
         // Mã hóa dữ liệu để an toàn trên URL
@@ -516,7 +546,7 @@ class AuthController extends Controller
      */
     private function redirectToFrontendWithError($errorMessage)
     {
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
         // TỐI ƯU: Gửi lỗi về trang login để hiển thị
         $loginPath = '/login'; 
         $message = urlencode($errorMessage);

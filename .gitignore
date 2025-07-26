@@ -25,4 +25,18 @@
 Thumbs.db
 
 # Docker
-.docker 
+.docker
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+ai-microservice/venv/
+*.egg-info/
+dist/
+build/ 
