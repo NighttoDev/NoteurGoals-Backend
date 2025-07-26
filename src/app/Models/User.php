@@ -28,6 +28,7 @@ class User extends Authenticatable
         'registration_type',
         'status',
         'reset_token',
+        'verification_token',
         'last_login_at'
     ];
 
@@ -39,6 +40,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password_hash',
         'reset_token',
+        'verification_token',
     ];
 
     /**
@@ -69,38 +71,53 @@ class User extends Authenticatable
 
     public function goals()
     {
-        return $this->hasMany(Goal::class);
+        return $this->hasMany(Goal::class, 'user_id', 'user_id');
     }
 
     public function notes()
     {
-        return $this->hasMany(Note::class);
+        return $this->hasMany(Note::class, 'user_id', 'user_id');
     }
 
     public function events()
     {
-        return $this->hasMany(Event::class);
+        return $this->hasMany(Event::class, 'user_id', 'user_id');
     }
 
     public function files()
     {
-        return $this->hasMany(File::class);
+        return $this->hasMany(File::class, 'user_id', 'user_id');
     }
 
     public function friendships()
     {
-        return $this->hasMany(Friendship::class, 'user_id_1')
-            ->orWhere('user_id_2', $this->id);
+        return $this->hasMany(Friendship::class, 'user_id_1', 'user_id');
+    }
+
+    public function friendshipRequests()
+    {
+        return $this->hasMany(Friendship::class, 'user_id_2', 'user_id');
+    }
+
+    public function allFriendships()
+    {
+        return $this->hasMany(Friendship::class, 'user_id_1', 'user_id')
+            ->union($this->hasMany(Friendship::class, 'user_id_2', 'user_id'));
     }
 
     public function subscriptions()
     {
-        return $this->hasMany(UserSubscription::class);
+        return $this->hasMany(UserSubscription::class, 'user_id', 'user_id');
     }
 
     public function notifications()
     {
-        return $this->hasMany(Notification::class);
+        return $this->hasMany(Notification::class, 'user_id', 'user_id');
+    }
+
+    public function admin()
+    {
+        return $this->hasOne(Admin::class, 'user_id', 'user_id');
     }
 
     // Helper methods
@@ -115,5 +132,76 @@ class User extends Authenticatable
             ->where('end_date', '>', now())
             ->where('payment_status', 'active')
             ->exists();
+    }
+
+    // Friendship helper methods
+    public function isFriendWith($userId)
+    {
+        return $this->friendships()
+            ->where('user_id_2', $userId)
+            ->where('status', 'accepted')
+            ->exists()
+        || $this->friendshipRequests()
+            ->where('user_id_1', $userId)
+            ->where('status', 'accepted')
+            ->exists();
+    }
+
+    public function hasPendingFriendRequestWith($userId)
+    {
+        return $this->friendships()
+            ->where('user_id_2', $userId)
+            ->where('status', 'pending')
+            ->exists()
+        || $this->friendshipRequests()
+            ->where('user_id_1', $userId)
+            ->where('status', 'pending')
+            ->exists();
+    }
+
+    public function getFriends()
+    {
+        $friendships = $this->friendships()->where('status', 'accepted')->get();
+        $friendRequests = $this->friendshipRequests()->where('status', 'accepted')->get();
+        
+        $friendIds = collect();
+        
+        foreach ($friendships as $friendship) {
+            $friendIds->push($friendship->user_id_2);
+        }
+        
+        foreach ($friendRequests as $request) {
+            $friendIds->push($request->user_id_1);
+        }
+        
+        return User::whereIn('user_id', $friendIds->unique())->get();
+    }
+
+    // Status helper methods
+    public function isActive()
+    {
+        return $this->status === 'active';
+    }
+
+    public function isBanned()
+    {
+        return $this->status === 'banned';
+    }
+
+    public function isVerified()
+    {
+        return $this->status !== 'unverified';
+    }
+
+    public function ban()
+    {
+        $this->status = 'banned';
+        $this->save();
+    }
+
+    public function activate()
+    {
+        $this->status = 'active';
+        $this->save();
     }
 }

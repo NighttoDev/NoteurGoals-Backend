@@ -33,6 +33,6 @@ class Milestone extends Model
 
     public function notes(): BelongsToMany
     {
-        return $this->belongsToMany(Note::class, 'note_milestone_links', 'milestone_id', 'note_id');
+        return $this->belongsToMany(Note::class, 'NoteMilestoneLinks', 'milestone_id', 'note_id');
     }
 }

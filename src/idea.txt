@@ -102,7 +102,7 @@ o Sử dụng Apache JMeter và các công cụ bảo mật để đánh giá hi
 5. Triển khai (Deployment)
 5.1. Cấu hình máy chủ
 • Container hóa ứng dụng:
-o Sử dụng Docker để đóng gói các thành phần: frontend (Nuxt.js), backend (Laravel) và microservice AI.
+o Sử dụng Docker để đóng gói các thành phần: frontend (React.js), backend (Laravel) và microservice AI.
 • Reverse Proxy & Load Balancer:
 o Triển khai Nginx để điều phối lưu lượng và tối ưu hiệu suất hệ thống.
 5.2. Cấu hình CI/CD

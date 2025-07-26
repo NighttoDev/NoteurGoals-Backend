@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Goal extends Model
 {
+    protected $table = 'Goals';
+    protected $primaryKey = 'goal_id';
+    public $timestamps = true;
+
     protected $fillable = [
         'user_id',
         'title',
@@ -28,47 +32,47 @@ class Goal extends Model
     // Relationships
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
     public function milestones(): HasMany
     {
-        return $this->hasMany(Milestone::class);
+        return $this->hasMany(Milestone::class, 'goal_id', 'goal_id');
     }
 
     public function progress(): HasOne
     {
-        return $this->hasOne(GoalProgress::class);
+        return $this->hasOne(GoalProgress::class, 'goal_id', 'goal_id');
     }
 
     public function notes()
     {
-        return $this->belongsToMany(Note::class, 'note_goal_links');
+        return $this->belongsToMany(Note::class, 'NoteGoalLinks', 'goal_id', 'note_id');
     }
 
     public function files()
     {
-        return $this->belongsToMany(File::class, 'file_goal_links');
+        return $this->belongsToMany(File::class, 'FileGoalLinks', 'goal_id', 'file_id');
     }
 
     public function events()
     {
-        return $this->belongsToMany(Event::class, 'event_goal_links');
+        return $this->belongsToMany(Event::class, 'EventGoalLinks', 'goal_id', 'event_id');
     }
 
     public function aiSuggestions()
     {
-        return $this->belongsToMany(AISuggestion::class, 'ai_suggestion_goal_links');
+        return $this->belongsToMany(AISuggestion::class, 'AISuggestionGoalLinks', 'goal_id', 'suggestion_id');
     }
 
     public function share()
     {
-        return $this->hasOne(GoalShare::class);
+        return $this->hasOne(GoalShare::class, 'goal_id', 'goal_id');
     }
 
     public function collaborations()
     {
-        return $this->hasMany(GoalCollaboration::class);
+        return $this->hasMany(GoalCollaboration::class, 'goal_id', 'goal_id')->with('user');
     }
 
     // Helper methods
@@ -105,7 +109,7 @@ class Goal extends Model
 
     public function canBeAccessedBy(User $user)
     {
-        if ($this->user_id === $user->id) {
+        if ($this->user_id === $user->user_id) {
             return true;
         }
 
@@ -116,16 +120,18 @@ class Goal extends Model
 
             if ($this->share->share_type === 'friends') {
                 return $this->user->friendships()
-                    ->where(function ($query) use ($user) {
-                        $query->where('user_id_2', $user->id)
-                            ->where('status', 'accepted');
-                    })
+                    ->where('user_id_2', $user->user_id)
+                    ->where('status', 'accepted')
+                    ->exists()
+                || $this->user->friendshipRequests()
+                    ->where('user_id_1', $user->user_id) 
+                    ->where('status', 'accepted')
                     ->exists();
             }
 
             if ($this->share->share_type === 'collaboration') {
                 return $this->collaborations()
-                    ->where('user_id', $user->id)
+                    ->where('user_id', $user->user_id)
                     ->exists();
             }
         }
