@@ -22,12 +22,12 @@ class Friendship extends Model
         'updated_at' => 'datetime',
     ];
 
-    public function requester(): BelongsTo
+    public function user1(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id_1', 'user_id');
     }
 
-    public function addressee(): BelongsTo
+    public function user2(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id_2', 'user_id');
     }

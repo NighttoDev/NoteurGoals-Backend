@@ -38,7 +38,7 @@ class SubscriptionController extends Controller
         $end = Carbon::today()->addMonths($plan->duration);
 
         $subscription = UserSubscription::create([
-            'user_id' => Auth::id(),
+            'user_id' => Auth::user()->user_id,
             'plan_id' => $plan->plan_id,
             'start_date' => $start,
             'end_date' => $end,
@@ -50,7 +50,7 @@ class SubscriptionController extends Controller
 
     public function cancel(UserSubscription $subscription)
     {
-        if ($subscription->user_id !== Auth::id()) {
+        if ($subscription->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
