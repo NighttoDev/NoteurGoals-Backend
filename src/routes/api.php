@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // --- Controllers ---
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Api\UserController; // Controller mới cho Profile/Account
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Goal\GoalController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Event\EventController;
@@ -16,6 +16,7 @@ use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\Friendship\FriendshipController;
 use App\Http\Controllers\AISuggestion\AISuggestionController;
 use App\Http\Controllers\Subscription\SubscriptionController;
+use App\Http\Controllers\Payment\PaymentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -70,9 +71,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/goals/{goal}', [GoalController::class, 'show']);
     Route::put('/goals/{goal}', [GoalController::class, 'update']);
     Route::delete('/goals/{goal}', [GoalController::class, 'destroy']);
+
     Route::post('/goals/{goal}/collaborators', [GoalController::class, 'addCollaborator']);
     Route::delete('/goals/{goal}/collaborators/{userId}', [GoalController::class, 'removeCollaborator']);
     Route::put('/goals/{goal}/share', [GoalController::class, 'updateShareSettings']);
+    Route::apiResource('goals.milestones', MilestoneController::class)->shallow();
 
     // --- Notes ---
     Route::get('/notes', [NoteController::class, 'index']);
@@ -80,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notes/{note}', [NoteController::class, 'show']);
     Route::put('/notes/{note}', [NoteController::class, 'update']);
     Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
+
     Route::post('/notes/{note}/goals', [NoteController::class, 'linkGoal']);
     Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
     Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
@@ -120,11 +124,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/files/{file}', [FileController::class, 'show']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
     Route::get('/files/{file}/with-links', [FileController::class, 'showWithLinks']);
+
     Route::get('/files/{file}/download', [FileController::class, 'download']);
     Route::post('/files/{file}/goals', [FileController::class, 'linkGoal']);
     Route::delete('/files/{file}/goals/{goalId}', [FileController::class, 'unlinkGoal']);
     Route::post('/files/{file}/notes', [FileController::class, 'linkNote']);
     Route::delete('/files/{file}/notes/{noteId}', [FileController::class, 'unlinkNote']);
+
 
     // --- AI Suggestions ---
     Route::get('/ai-suggestions', [AISuggestionController::class, 'index']);
@@ -156,3 +162,4 @@ Route::middleware('auth:sanctum')->group(function () {
 // Ghi chú: Các route bị comment lại hoặc không dùng đến đã được lược bỏ để giữ sự gọn gàng.
 // Route::get('/user', ...); đã được thay thế bằng /me hoặc /user/profile để tường minh hơn.
 // Route::get('/auth/verify/{id}/{token}', ...); đã được thay thế bằng luồng OTP với POST /verify-email.
+
