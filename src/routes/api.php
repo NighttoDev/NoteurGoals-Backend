@@ -80,8 +80,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notes/{note}', [NoteController::class, 'show']);
     Route::put('/notes/{note}', [NoteController::class, 'update']);
     Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
-    Route::post('/notes/{note}/goals', [NoteController::class, 'linkGoal']);
-    Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
+    // Route mới để đồng bộ nhiều goals
+    Route::post('/notes/{note}/goals/sync', [NoteController::class, 'syncGoals']);
+    // Route::post('/notes/{note}/goals', [NoteController::class, 'linkGoal']);
+    // Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
     Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
     Route::delete('/notes/{note}/milestones/{milestoneId}', [NoteController::class, 'unlinkMilestone']);
 
@@ -111,6 +113,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/friends/request', [FriendshipController::class, 'sendRequest']);
     Route::post('/friends/{friendship}/respond', [FriendshipController::class, 'respond']);
     Route::delete('/friends/{friendship}', [FriendshipController::class, 'destroy']);
+    // Route này để lấy danh sách cộng tác viên từ các mục tiêu
+    Route::get('/collaborators', [GoalController::class, 'getAllCollaborators']);
 
     // --- Files ---
     Route::get('/files', [FileController::class, 'index']);

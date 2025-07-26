@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Goal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Goal;
+use App\Models\User;
 use App\Models\GoalProgress;
 use App\Models\GoalShare;
 use App\Models\GoalCollaboration;
+use App\Models\Milestone; // <-- Đã import
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB; // <-- Đã import
 use Illuminate\Support\Facades\Validator;
 
 class GoalController extends Controller
@@ -17,8 +20,8 @@ class GoalController extends Controller
     {
         $query = Auth::user()->goals();
 
-        // Filter by status
-        if ($request->has('status')) {
+        // Filter by status, bỏ qua nếu status là 'all'
+        if ($request->has('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
@@ -35,7 +38,8 @@ class GoalController extends Controller
             $query->where('title', 'like', '%' . $request->search . '%');
         }
 
-        $goals = $query->with(['milestones', 'progress'])
+        // Eager load các relationship để tối ưu query
+        $goals = $query->with(['milestones', 'progress', 'share', 'collaborations'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
 
@@ -44,40 +48,47 @@ class GoalController extends Controller
 
     public function store(Request $request)
     {
+        // Thêm validation cho milestones và share_type
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:200',
             'description' => 'nullable|string',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'share_type' => 'nullable|in:private,public,friends,collaboration'
+            'share_type' => 'nullable|in:private,public,friends,collaboration',
+            'milestones' => 'nullable|array',
+            'milestones.*.title' => 'required_with:milestones|string|max:255',
+            'milestones.*.deadline' => 'required_with:milestones|date',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $goal = Goal::create([
-            'user_id' => Auth::user()->user_id,
-            'title' => $request->title,
-            'description' => $request->description,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'status' => 'new'
-        ]);
-
-        // Create initial progress
-        GoalProgress::create([
-            'goal_id' => $goal->goal_id,
-            'progress_value' => 0
-        ]);
-
-        // Create share settings if provided
-        if ($request->has('share_type')) {
-            GoalShare::create([
-                'goal_id' => $goal->goal_id,
-                'share_type' => $request->share_type
+        // Sử dụng DB Transaction để đảm bảo toàn vẹn dữ liệu
+        $goal = DB::transaction(function () use ($request) {
+            $goal = Goal::create([
+                'user_id' => Auth::id(),
+                'title' => $request->title,
+                'description' => $request->description,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'status' => 'new'
             ]);
-        }
+
+            GoalProgress::create(['goal_id' => $goal->goal_id, 'progress_value' => 0]);
+
+            if ($request->filled('share_type')) {
+                GoalShare::create(['goal_id' => $goal->goal_id, 'share_type' => $request->share_type]);
+            }
+
+            // Logic để tạo các milestones
+            if ($request->has('milestones')) {
+                $milestonesData = collect($request->milestones)->map(fn($m) => new Milestone($m));
+                $goal->milestones()->saveMany($milestonesData);
+            }
+
+            return $goal;
+        });
 
         return response()->json([
             'message' => 'Goal created successfully',
@@ -87,144 +98,168 @@ class GoalController extends Controller
 
     public function show(Goal $goal)
     {
+        // Tận dụng phương thức helper trong model để kiểm tra quyền
         if (!$goal->canBeAccessedBy(Auth::user())) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         return response()->json($goal->load([
-            'milestones',
-            'progress',
-            'notes',
-            'files',
-            'events',
-            'aiSuggestions',
-            'share',
-            'collaborations'
+            'milestones', 'progress', 'notes', 'files', 'events',
+            'aiSuggestions', 'share', 'collaborations'
         ]));
     }
 
     public function update(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::user()->user_id) {
+        // Chỉ chủ sở hữu mới có quyền cập nhật toàn bộ
+        if ($goal->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'title' => 'string|max:200',
+            'title' => 'sometimes|required|string|max:200',
             'description' => 'nullable|string',
-            'start_date' => 'date',
-            'end_date' => 'date|after:start_date',
-            'status' => 'in:new,in_progress,completed,cancelled',
-            'share_type' => 'nullable|in:private,public,friends,collaboration'
+            'start_date' => 'sometimes|required|date',
+            'end_date' => 'sometimes|required|date|after:start_date',
+            'status' => 'sometimes|in:new,in_progress,completed,cancelled',
+            'share_type' => 'nullable|in:private,public,friends,collaboration',
+            'milestones' => 'nullable|array',
+            'milestones.*.title' => 'required_with:milestones|string|max:255',
+            'milestones.*.deadline' => 'required_with:milestones|date',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $goal->update($request->only([
-            'title',
-            'description',
-            'start_date',
-            'end_date',
-            'status'
-        ]));
+        DB::transaction(function () use ($request, $goal) {
+            // Cập nhật các trường chính của Goal
+            $goal->update($request->except(['milestones', 'share_type']));
 
-        if ($request->has('share_type')) {
-            $goal->share()->updateOrCreate(
-                ['goal_id' => $goal->goal_id],
-                ['share_type' => $request->share_type]
-            );
-        }
+            // Cập nhật hoặc tạo mới cài đặt chia sẻ
+            if ($request->has('share_type')) {
+                $goal->share()->updateOrCreate([], ['share_type' => $request->share_type]);
+            }
 
+            // Đồng bộ hóa milestones (xóa cũ, tạo mới)
+            if ($request->has('milestones')) {
+                $goal->milestones()->delete();
+                if (!empty($request->milestones)) {
+                    $milestonesData = collect($request->milestones)->map(fn($m) => new Milestone($m));
+                    $goal->milestones()->saveMany($milestonesData);
+                }
+            }
+            
+            // Tự động cập nhật lại status dựa trên progress nếu status không được gửi lên thủ công
+            if (!$request->has('status')) {
+                $goal->refresh()->updateStatus();
+            }
+        });
+
+        // Dùng fresh() để lấy lại dữ liệu mới nhất từ DB
         return response()->json([
             'message' => 'Goal updated successfully',
-            'goal' => $goal->load(['milestones', 'progress', 'share'])
+            'goal' => $goal->fresh()->load(['milestones', 'progress', 'share'])
         ]);
     }
 
     public function destroy(Goal $goal)
     {
-        if ($goal->user_id !== Auth::user()->user_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // Chỉ chủ sở hữu mới được xóa
+        if ($goal->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized. Only the owner can delete the goal.'], 403);
         }
 
         $goal->delete();
 
-        return response()->json([
-            'message' => 'Goal deleted successfully'
-        ]);
+        return response()->json(['message' => 'Goal deleted successfully']);
     }
 
     public function addCollaborator(Request $request, Goal $goal)
     {
-        if ($goal->user_id !== Auth::user()->user_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // 1. Kiểm tra quyền: Chỉ chủ sở hữu goal mới được mời
+        if ($goal->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized. Only the owner can add collaborators.'], 403);
         }
-
+    
+        // 2. Validate dữ liệu gửi lên: Yêu cầu email và email đó phải tồn tại
         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|exists:Users,user_id',
-            'role' => 'required|in:owner,member'
+            'email' => 'required|email|exists:Users,email',
+            'role' => 'sometimes|in:owner,member'
         ]);
-
+    
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json(['message' => 'Invalid email or user does not exist.', 'errors' => $validator->errors()], 422);
         }
-
-        // Check if user is already a collaborator
-        if ($goal->collaborations()->where('user_id', $request->user_id)->exists()) {
-            return response()->json([
-                'message' => 'User is already a collaborator'
-            ], 400);
+    
+        // 3. Tìm người dùng dựa trên email
+        $userToAdd = User::where('email', $request->email)->first();
+    
+        // 4. Các bước kiểm tra logic nghiệp vụ
+        if ($userToAdd->user_id === Auth::id()) {
+            return response()->json(['message' => 'You cannot add yourself as a collaborator.'], 400);
         }
-
+        
+        if ($goal->collaborations()->where('user_id', $userToAdd->user_id)->exists()) {
+            return response()->json(['message' => 'This user is already a collaborator.'], 409); // 409 Conflict
+        }
+    
+        // 5. Tạo bản ghi collaboration mới
         $collaboration = GoalCollaboration::create([
             'goal_id' => $goal->goal_id,
-            'user_id' => $request->user_id,
-            'role' => $request->role
+            'user_id' => $userToAdd->user_id,
+            'role' => $request->input('role', 'member'),
+            // Tự động điền 'joined_at' nếu model của bạn yêu cầu
+            // 'joined_at' => now() // Bỏ comment dòng này nếu cần
         ]);
-
+    
+        // 6. Trả về response thành công kèm theo dữ liệu collaboration mới
+        // .load('user') để đảm bảo thông tin của user (tên, avatar...) được gửi về cho frontend
         return response()->json([
             'message' => 'Collaborator added successfully',
-            'collaboration' => $collaboration
-        ]);
+            'collaboration' => $collaboration->load('user')
+        ], 201);
     }
 
     public function removeCollaborator(Goal $goal, $userId)
     {
-        if ($goal->user_id !== Auth::user()->user_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // Chỉ chủ sở hữu mới được xóa cộng tác viên
+        if ($goal->user_id !== Auth::id()) {
+            return response()->json(['message' => 'Unauthorized. Only the owner can remove collaborators.'], 403);
         }
 
         $goal->collaborations()->where('user_id', $userId)->delete();
 
-        return response()->json([
-            'message' => 'Collaborator removed successfully'
-        ]);
+        return response()->json(['message' => 'Collaborator removed successfully']);
     }
 
-    public function updateShareSettings(Request $request, Goal $goal)
+    public function getAllCollaborators()
     {
-        if ($goal->user_id !== Auth::user()->user_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        $currentUserId = Auth::id();
+
+        // Lấy ID của tất cả các mục tiêu mà người dùng hiện tại là chủ sở hữu.
+        $ownedGoalIds = Goal::where('user_id', $currentUserId)->pluck('goal_id');
+
+        if ($ownedGoalIds->isEmpty()) {
+            return response()->json([]);
+        }
+        
+        // Lấy ID của tất cả người dùng cộng tác trên các mục tiêu đó (trừ chính chủ sở hữu).
+        $collaboratorIds = GoalCollaboration::whereIn('goal_id', $ownedGoalIds)
+            ->where('user_id', '!=', $currentUserId)
+            ->distinct()
+            ->pluck('user_id');
+
+        if ($collaboratorIds->isEmpty()) {
+            return response()->json([]);
         }
 
-        $validator = Validator::make($request->all(), [
-            'share_type' => 'required|in:private,public,friends,collaboration'
-        ]);
+        // Lấy thông tin chi tiết của các cộng tác viên.
+        // Dùng alias 'id' để frontend dễ dàng xử lý (key={collaborator.id})
+        $collaborators = User::whereIn('user_id', $collaboratorIds)
+            ->select('user_id as id', 'name', 'email', 'avatar')
+            ->get();
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $goal->share()->updateOrCreate(
-            ['goal_id' => $goal->goal_id],
-            ['share_type' => $request->share_type]
-        );
-
-        return response()->json([
-            'message' => 'Share settings updated successfully',
-            'share' => $goal->share
-        ]);
+        return response()->json($collaborators);
     }
-} 
+}

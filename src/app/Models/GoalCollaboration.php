@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GoalCollaboration extends Model
 {
-    protected $table = 'GoalCollaboration';
+    protected $table = 'GoalCollaboration'; // Tên bảng trong cơ sở dữ liệu
     protected $primaryKey = 'collab_id';
     public $timestamps = false;
 

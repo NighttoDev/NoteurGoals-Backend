@@ -32,7 +32,7 @@ services:
   # PHP Application Service
   app:
     container_name: app_dev
-    build: 
+    build:
       context: ./php
       dockerfile: Dockerfile.dev
     volumes:
@@ -55,4 +55,4 @@ services:
 
 networks:
   app-network:
-    driver: bridge 
+    driver: bridge
