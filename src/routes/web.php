@@ -71,6 +71,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 });
 
 // User authentication routes with prefix to avoid conflicts
-Route::prefix('user')->group(function () {
-    require __DIR__.'/auth.php';
-});
+// Route::prefix('user')->group(function () {
+//     require __DIR__.'/auth.php';
+// });
