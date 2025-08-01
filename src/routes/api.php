@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 // --- Controllers ---
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Api\UserController; // Controller mới cho Profile/Account
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Goal\GoalController;
 use App\Http\Controllers\Note\NoteController;
 use App\Http\Controllers\Event\EventController;
@@ -16,6 +16,8 @@ use App\Http\Controllers\Notification\NotificationController;
 use App\Http\Controllers\Friendship\FriendshipController;
 use App\Http\Controllers\AISuggestion\AISuggestionController;
 use App\Http\Controllers\Subscription\SubscriptionController;
+// Giả sử bạn tạo Controller này để quản lý các tính năng cộng đồng
+use App\Http\Controllers\Community\CommunityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,20 +29,14 @@ use App\Http\Controllers\Subscription\SubscriptionController;
 // --- PUBLIC & AUTHENTICATION ROUTES ---
 // =======================================================
 
-// --- Standard Auth ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-
-
-// --- Social Login Callbacks (Stateless) ---
-// Đặt ở ngoài group middleware để không yêu cầu xác thực
 Route::get('/auth/google/callback-direct', [AuthController::class, 'handleGoogleCallbackDirect']);
 Route::get('/auth/facebook/callback-direct', [AuthController::class, 'handleFacebookCallbackDirect']);
-
 
 // =======================================================
 // --- PROTECTED ROUTES (Require sanctum authentication) ---
@@ -49,50 +45,44 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // --- Core Auth & User Info ---
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me', [AuthController::class, 'me']); // Lấy thông tin người dùng hiện tại
+    Route::get('/me', [AuthController::class, 'me']);
 
-    // --- NEW: USER PROFILE & ACCOUNT MANAGEMENT ROUTES ---
+    // --- User Profile & Account Management ---
     Route::prefix('user')->group(function () {
-        // Lấy thông tin profile chi tiết, có thể dùng thay thế /me nếu cần
         Route::get('/profile', [UserController::class, 'getProfile']);
-        // Cập nhật tên, avatar (dùng POST vì có thể chứa file upload)
         Route::post('/profile/update', [UserController::class, 'updateProfile']);
-        // Đổi mật khẩu
         Route::post('/password/change', [UserController::class, 'changePassword']);
-        // Xóa tài khoản
         Route::post('/account/delete', [UserController::class, 'deleteAccount']);
+        // Route cho chức năng báo cáo người dùng
+        Route::post('/{user}/report', [UserController::class, 'reportUser']);
     });
-    // --- END NEW ROUTES ---
+
+    // --- Friendships & Community ---
+    Route::get('/friends', [FriendshipController::class, 'index']);
+    // Route này sẽ chấp nhận cả email và user_id
+    Route::post('/friends/request', [FriendshipController::class, 'sendRequest']);
+    Route::post('/friends/{friendship}/respond', [FriendshipController::class, 'respond']);
+    Route::delete('/friends/{friendship}', [FriendshipController::class, 'destroy']);
+    
+    // CÁC ROUTE MỚI
+    Route::get('/users/suggestions', [FriendshipController::class, 'getSuggestions']);
+    Route::get('/users/search', [FriendshipController::class, 'searchUsers']);
+    Route::get('/community/feed', [CommunityController::class, 'getFeed']);
 
     // --- Goal management ---
-    Route::get('/goals', [GoalController::class, 'index']);
-    Route::post('/goals', [GoalController::class, 'store']);
-    Route::get('/goals/{goal}', [GoalController::class, 'show']);
-    Route::put('/goals/{goal}', [GoalController::class, 'update']);
-    Route::delete('/goals/{goal}', [GoalController::class, 'destroy']);
+    Route::apiResource('goals', GoalController::class);
     Route::post('/goals/{goal}/collaborators', [GoalController::class, 'addCollaborator']);
     Route::delete('/goals/{goal}/collaborators/{userId}', [GoalController::class, 'removeCollaborator']);
     Route::put('/goals/{goal}/share', [GoalController::class, 'updateShareSettings']);
 
     // --- Notes ---
-    Route::get('/notes', [NoteController::class, 'index']);
-    Route::post('/notes', [NoteController::class, 'store']);
-    Route::get('/notes/{note}', [NoteController::class, 'show']);
-    Route::put('/notes/{note}', [NoteController::class, 'update']);
-    Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
-    // Route mới để đồng bộ nhiều goals
+    Route::apiResource('notes', NoteController::class)->except(['create', 'edit']);
     Route::post('/notes/{note}/goals/sync', [NoteController::class, 'syncGoals']);
-    // Route::post('/notes/{note}/goals', [NoteController::class, 'linkGoal']);
-    // Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
     Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
     Route::delete('/notes/{note}/milestones/{milestoneId}', [NoteController::class, 'unlinkMilestone']);
 
     // --- Events ---
-    Route::get('/events', [EventController::class, 'index']);
-    Route::post('/events', [EventController::class, 'store']);
-    Route::get('/events/{event}', [EventController::class, 'show']);
-    Route::put('/events/{event}', [EventController::class, 'update']);
-    Route::delete('/events/{event}', [EventController::class, 'destroy']);
+    Route::apiResource('events', EventController::class)->except(['create', 'edit']);
     Route::post('/events/{event}/goals', [EventController::class, 'linkGoal']);
     Route::delete('/events/{event}/goals/{goalId}', [EventController::class, 'unlinkGoal']);
 
