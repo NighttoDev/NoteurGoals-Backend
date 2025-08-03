@@ -12,7 +12,12 @@ class NoteController extends Controller
 {
     public function index(Request $request)
     {
-        $notes = Auth::user()->notes()->orderBy('created_at', 'desc')->paginate(10);
+        // Sử dụng with('goals') để tải kèm các goals đã liên kết
+        $notes = Auth::user()->notes()
+                    ->with('goals') // <-- THAY ĐỔI QUAN TRỌNG Ở ĐÂY
+                    ->orderBy('created_at', 'desc')
+                    ->paginate(10);
+                    
         return response()->json($notes);
     }
 
@@ -71,6 +76,49 @@ class NoteController extends Controller
         }
         $note->delete();
         return response()->json(['message' => 'Note deleted successfully']);
+    }
+
+    public function syncGoals(Request $request, Note $note)
+    {
+        // 1. Kiểm tra quyền sở hữu note
+        if ($note->user_id !== Auth::user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // 2. Validate dữ liệu đầu vào
+        $validator = Validator::make($request->all(), [
+            'goal_ids' => 'present|array', // Phải có key 'goal_ids', có thể là mảng rỗng
+            'goal_ids.*' => 'integer|exists:Goals,goal_id', // Mỗi phần tử phải là số và tồn tại trong bảng Goals
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+        
+        $goalIds = $request->input('goal_ids', []);
+
+        // 3. Kiểm tra quyền sở hữu của tất cả các goal được gửi lên
+        $userGoalCount = \App\Models\Goal::where('user_id', Auth::user()->user_id)
+                                          ->whereIn('goal_id', $goalIds)
+                                          ->count();
+        if (count($goalIds) !== $userGoalCount) {
+             return response()->json(['message' => 'One or more goals do not belong to the user.'], 403);
+        }
+
+        // 4. Sử dụng sync() để đồng bộ hóa
+        // sync() sẽ tự động:
+        // - Thêm các liên kết mới (attach).
+        // - Xóa các liên kết không còn trong mảng `goalIds` (detach).
+        // - Giữ nguyên các liên kết đã có.
+        $note->goals()->sync($goalIds);
+        
+        // Lấy lại note với các goals đã được cập nhật để trả về cho frontend
+        $note->load('goals');
+
+        return response()->json([
+            'message' => 'Goals synced successfully', 
+            'note' => $note
+        ]);
     }
 
     public function linkGoal(Request $request, Note $note)
