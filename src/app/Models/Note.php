@@ -73,7 +73,7 @@ class Note extends Model
     public function isLinkedToMilestone($milestoneId = null)
     {
         if ($milestoneId) {
-            return $this->milestones()->where('milestone_id', $milestoneId)->exists();
+            return $this->milestones()->where('Milestones.milestone_id', $milestoneId)->exists();
         }
         return $this->milestones()->exists();
     }
