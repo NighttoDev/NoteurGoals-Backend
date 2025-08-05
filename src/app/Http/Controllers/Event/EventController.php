@@ -13,7 +13,7 @@ class EventController extends Controller
 {
     public function index(Request $request)
     {
-        $events = Event::with('user')
+        $events = Event::where('user_id', Auth::user()->user_id)
             ->latest()
             ->paginate(10);
 
