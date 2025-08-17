@@ -7,9 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
 
 class Event extends Model
 {
+    use HasFactory, SoftDeletes;
+
     protected $table = 'Events';
     protected $primaryKey = 'event_id';
     public $timestamps = true;
@@ -20,6 +25,8 @@ class Event extends Model
         'description',
         'event_time',
     ];
+
+    protected $dates = ['deleted_at'];
 
     protected $casts = [
         'event_time' => 'datetime',
