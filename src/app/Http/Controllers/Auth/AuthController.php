@@ -470,7 +470,7 @@ class AuthController extends Controller
         $user->load('profile'); // Load profile để gửi về frontend
 
         // TỐI ƯU QUAN TRỌNG: Gửi cả token và user_info về frontend
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
         $callbackPath = '/auth/social-callback';
 
         // Mã hóa dữ liệu để an toàn trên URL
@@ -517,7 +517,7 @@ class AuthController extends Controller
      */
     private function redirectToFrontendWithError($errorMessage)
     {
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5174'), '/');
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
         // TỐI ƯU: Gửi lỗi về trang login để hiển thị
         $loginPath = '/login'; 
         $message = urlencode($errorMessage);

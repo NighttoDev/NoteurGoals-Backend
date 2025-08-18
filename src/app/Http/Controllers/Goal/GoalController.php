@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB; // <-- Đã import
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class GoalController extends Controller
 {
@@ -374,5 +375,22 @@ class GoalController extends Controller
             ->get();
 
         return response()->json($collaborators);
+    }
+
+    /**
+     * Helper: Load common relations for a Goal model
+     */
+    private function loadGoalRelations(Goal $goal)
+    {
+        return $goal->load([
+            'milestones',
+            'progress',
+            'notes',
+            'files',
+            'events',
+            'aiSuggestions',
+            'share',
+            'collaborations',
+        ]);
     }
 }
