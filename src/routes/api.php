@@ -17,6 +17,7 @@ use App\Http\Controllers\Friendship\FriendshipController;
 use App\Http\Controllers\AISuggestion\AISuggestionController;
 use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Payment\PaymentController;
+use App\Http\Controllers\Api\MessageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -77,13 +78,25 @@ Route::middleware('auth:sanctum')->group(function () {
         // Route này sẽ được frontend gọi sau khi người dùng quay về từ VNPay.
         Route::post('/vnpay/verify-return', 'verifyReturnData');
     });
+
+     // --- USER SEARCH (FOR FRIEND REQUESTS) ---
+    // <-- THÊM MỚI ROUTE TÌM KIẾM TẠI ĐÂY -->
+    Route::get('/users/search', [FriendshipController::class, 'searchUsers']);
+
     
     // --- FRIENDSHIPS ---
     Route::prefix('friends')->controller(FriendshipController::class)->group(function () {
         Route::get('/', 'index');
         Route::post('/request', 'sendRequest');
+        Route::post('/request/id', 'sendRequestById');
         Route::post('/{friendship}/respond', 'respond');
         Route::delete('/{friendship}', 'destroy');
+    });
+
+     // --- MESSAGES ---
+    Route::prefix('messages')->controller(MessageController::class)->group(function () {
+        Route::get('/{friend:user_id}', 'index'); // Lấy lịch sử chat với 1 user
+        Route::post('/', 'store');                // Gửi tin nhắn mới
     });
 
     // --- NOTIFICATIONS ---
