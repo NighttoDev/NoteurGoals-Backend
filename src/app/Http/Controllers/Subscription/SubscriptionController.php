@@ -80,15 +80,28 @@ class SubscriptionController extends Controller
      */
     public function cancel(UserSubscription $subscription)
     {
-        if ($subscription->user_id !== Auth::user()->user_id) {
+        $user = Auth::user();
+        if ($subscription->user_id !== $user->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $subscription->payment_status = 'cancelled';
-        $subscription->save();
+        // Nếu bản ghi được truyền vào không ở trạng thái active thì trả lỗi rõ ràng
+        if ($subscription->payment_status !== 'active') {
+            return response()->json(['message' => 'This subscription is not active or already cancelled.'], 422);
+        }
 
-        $subscription->load('plan');
-        return response()->json(['message' => 'Subscription cancelled successfully.', 'subscription' => $subscription]);
+        // Hủy tất cả các subscription đang active của user để tránh dữ liệu "mồ côi"
+        UserSubscription::where('user_id', $user->user_id)
+            ->where('payment_status', 'active')
+            ->update(['payment_status' => 'cancelled']);
+
+        // Tải lại bản ghi vừa hủy để trả về cho client
+        $subscription->refresh()->load('plan');
+
+        return response()->json([
+            'message' => 'Subscription cancelled successfully.',
+            'subscription' => $subscription,
+        ]);
     }
 
 }
