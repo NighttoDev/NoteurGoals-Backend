@@ -18,24 +18,39 @@ class FriendshipController extends Controller
      */
     public function index(Request $request)
     {
-        $currentUserId = Auth::id(); 
+        $currentUserId = Auth::id();
 
         $acceptedFriendships = Friendship::where('status', 'accepted')
             ->where(function ($query) use ($currentUserId) {
                 $query->where('user_id_1', $currentUserId)
                       ->orWhere('user_id_2', $currentUserId);
             })
-            ->with(['user1', 'user2'])
             ->get();
             
-        $friends = $acceptedFriendships->map(function ($friendship) use ($currentUserId) {
-            $friendUser = $friendship->user_id_1 === $currentUserId ? $friendship->user2 : $friendship->user1;
+        // Collect friend user ids (may be empty)
+        $friendIds = $acceptedFriendships->map(function ($friendship) use ($currentUserId) {
+            return $friendship->user_id_1 === $currentUserId ? $friendship->user_id_2 : $friendship->user_id_1;
+        })->unique()->values();
+        // Fetch users with counts and profile in one go to avoid N+1
+        $usersById = User::whereIn('user_id', $friendIds)
+            ->with(['profile'])
+            ->withCount(['goals', 'notes'])
+            ->get()
+            ->keyBy('user_id');
+
+        // Build friends payload with counts
+        $friends = $acceptedFriendships->map(function ($friendship) use ($currentUserId, $usersById) {
+            $friendId = $friendship->user_id_1 === $currentUserId ? $friendship->user_id_2 : $friendship->user_id_1;
+            $u = $usersById->get($friendId);
             return [
                 'friendship_id' => $friendship->friendship_id,
-                'id' => $friendUser->user_id,
-                'name' => $friendUser->display_name,
-                'email' => $friendUser->email,
-                'avatar' => $friendUser->avatar_url,
+                'id' => $u?->user_id,
+                'name' => $u?->display_name,
+                'email' => $u?->email,
+                'avatar' => $u?->avatar_url,
+                'total_goals' => (int)($u?->goals_count ?? 0),
+                'total_notes' => (int)($u?->notes_count ?? 0),
+                'is_premium' => (bool)optional($u?->profile)->is_premium,
             ];
         });
 
@@ -176,15 +191,41 @@ class FriendshipController extends Controller
                       ->orWhere('email', 'LIKE', "%{$searchQuery}%");
             })
             ->whereNotIn('user_id', array_unique($excludedUserIds))
+            ->select(['user_id', 'display_name', 'email', 'avatar_url'])
+            ->with(['profile'])
+            ->withCount(['goals', 'notes'])
             ->limit(10)
-            ->get([
-                'user_id',
-                'display_name as name',
-                'email',
-                'avatar_url as avatar'
-            ]);
+            ->get();
 
-        return response()->json(['users' => $users]);
+        // Enrich with friend status and unified keys used by frontend
+        $existingByPair = $existingRelations->keyBy(function ($f) use ($currentUserId) {
+            // key by the other user's id for quick lookup
+            return $f->user_id_1 == $currentUserId ? $f->user_id_2 : $f->user_id_1;
+        });
+
+        $result = $users->map(function ($u) use ($existingByPair, $currentUserId) {
+            $friendStatus = 'not_friends';
+            $friendship = $existingByPair->get($u->user_id);
+            if ($friendship) {
+                if ($friendship->status === 'accepted') {
+                    $friendStatus = 'friends';
+                } elseif ($friendship->status === 'pending') {
+                    $friendStatus = $friendship->user_id_1 == $currentUserId ? 'request_sent' : 'request_received';
+                }
+            }
+            return [
+                'id' => $u->user_id,
+                'name' => $u->display_name,
+                'email' => $u->email,
+                'avatar' => $u->avatar_url,
+                'total_goals' => (int)($u->goals_count ?? 0),
+                'total_notes' => (int)($u->notes_count ?? 0),
+                'is_premium' => (bool)optional($u->profile)->is_premium,
+                'friend_status' => $friendStatus,
+            ];
+        });
+
+        return response()->json(['users' => $result]);
     }
 
     /**

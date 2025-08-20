@@ -44,7 +44,7 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => 'error', 'message' => 'Invalid data.', 'errors' => $validator->errors()], 422);
         }
 
         DB::beginTransaction();
@@ -72,14 +72,14 @@ class UserController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Cập nhật thông tin thành công!',
+                'message' => 'Information updated successfully!',
                 'data' => $user,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Lỗi cập nhật profile: " . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra, không thể cập nhật profile.'], 500);
+            Log::error("Error Updating Profile: " . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'An Error Occurred, Unable to update your profile.'], 500);
         }
     }
 
@@ -91,31 +91,31 @@ class UserController extends Controller
         $user = $request->user();
 
         if ($user->registration_type !== 'email') {
-            return response()->json(['status' => 'error', 'message' => 'Tài khoản đăng nhập bằng mạng xã hội không thể đổi mật khẩu.'], 403);
+            return response()->json(['status' => 'error', 'message' => 'Social media accounts cannot change passwords.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
             'current_password' => ['required', function ($attribute, $value, $fail) use ($user) {
                 if (!Hash::check($value, $user->password_hash)) {
-                    $fail('Mật khẩu hiện tại không đúng.');
+                    $fail('Current password is incorrect.');
                 }
             }],
             'new_password' => ['required', 'string', 'min:8', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => 'error', 'message' => 'Invalid data.', 'errors' => $validator->errors()], 422);
         }
 
         try {
             $user->password_hash = Hash::make($request->input('new_password'));
             $user->save();
 
-            return response()->json(['status' => 'success', 'message' => 'Đổi mật khẩu thành công!']);
+            return response()->json(['status' => 'success', 'message' => 'Password changed successfully!']);
 
         } catch (\Exception $e) {
-            Log::error("Lỗi đổi mật khẩu: " . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra, không thể đổi mật khẩu.'], 500);
+            Log::error("Error changing password: " . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'An error occurred, unable to change password.'], 500);
         }
     }
 
@@ -137,11 +137,11 @@ class UserController extends Controller
             $user->delete();
 
             // ĐÃ SỬA LỖI Ở ĐÂY
-            return response()->json(['status' => 'success', 'message' => 'Tài khoản của bạn đã được xóa thành công.']);
+            return response()->json(['status' => 'success', 'message' => 'Your account has been deleted successfully.']);
 
         } catch (\Exception $e) {
-            Log::error("Lỗi xóa tài khoản: " . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra, không thể xóa tài khoản.'], 500);
+            Log::error("Error deleting account: " . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'An error occurred, unable to delete account.'], 500);
         }
     }
 }
