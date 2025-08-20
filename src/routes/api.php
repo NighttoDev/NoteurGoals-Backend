@@ -43,7 +43,6 @@ Route::controller(AuthController::class)->group(function () {
 
 
 // --- Social Login Callbacks (Stateless) ---
-// Đặt ở ngoài group middleware để không yêu cầu xác thực
 Route::get('/auth/google/callback-direct', [AuthController::class, 'handleGoogleCallbackDirect']);
 Route::get('/auth/facebook/callback-direct', [AuthController::class, 'handleFacebookCallbackDirect']);
 
@@ -51,7 +50,6 @@ Route::get('/auth/facebook/callback-direct', [AuthController::class, 'handleFace
 // =======================================================
 // --- PROTECTED ROUTES (Require sanctum authentication) ---
 // =======================================================
-// Routes yêu cầu xác thực
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']); 
@@ -62,7 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/account/delete', 'deleteAccount');
     });
 
-    // --- SUBSCRIPTION MANAGEMENT ---
+    // --- SUBSCRIPTION & PAYMENT ---
     Route::prefix('subscriptions')->controller(SubscriptionController::class)->group(function() {
         Route::get('/plans', 'plans');
         Route::get('/my-current', 'myCurrentSubscription');
@@ -70,21 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/plans/{plan}', 'show');
     });
 
-    // --- PAYMENT ROUTES ---
     Route::prefix('payment')->controller(PaymentController::class)->group(function() {
         Route::post('/vnpay/create', 'createVnPayPayment');
-
-        // *** ĐÂY LÀ ROUTE MỚI ĐƯỢC THÊM VÀO ***
-        // Route này sẽ được frontend gọi sau khi người dùng quay về từ VNPay.
         Route::post('/vnpay/verify-return', 'verifyReturnData');
     });
 
-     // --- USER SEARCH (FOR FRIEND REQUESTS) ---
-    // <-- THÊM MỚI ROUTE TÌM KIẾM TẠI ĐÂY -->
     Route::get('/users/search', [FriendshipController::class, 'searchUsers']);
-
+    Route::get('/users/suggestions', [FriendshipController::class, 'getUserSuggestions']);
     
-    // --- FRIENDSHIPS ---
     Route::prefix('friends')->controller(FriendshipController::class)->group(function () {
         Route::get('/', 'index');
         Route::post('/request', 'sendRequest');
@@ -93,85 +84,62 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{friendship}', 'destroy');
     });
 
+    Route::get('/collaborators', [FriendshipController::class, 'getCollaborators']);
+
      // --- MESSAGES ---
     Route::prefix('messages')->controller(MessageController::class)->group(function () {
-        Route::get('/{friend:user_id}', 'index'); // Lấy lịch sử chat với 1 user
-        Route::post('/', 'store');                // Gửi tin nhắn mới
+        Route::get('/{friendId}', 'index'); // Lấy lịch sử chat với 1 user bằng ID
+        Route::post('/', 'store');         // Gửi tin nhắn mới
     });
 
     // --- NOTIFICATIONS ---
     Route::prefix('notifications')->controller(NotificationController::class)->group(function () {
         Route::get('/', 'index');
-        Route::post('/notification}/read', 'markAsRead');
+        Route::post('/notification}/read', 'markAsRead'); // Có thể có lỗi typo ở đây, nên là '/{notification}/read'
         Route::delete('/{notification}', 'destroy');
     });
 
     // Goal management
-    Route::get('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'index']);
-    Route::post('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'store']);
-    Route::get('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'show']);
-    Route::put('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'update']);
-    Route::delete('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'destroy']);
-    Route::post('/goals/{goal}/collaborators', [\App\Http\Controllers\Goal\GoalController::class, 'addCollaborator']);
-    Route::delete('/goals/{goal}/collaborators/{userId}', [\App\Http\Controllers\Goal\GoalController::class, 'removeCollaborator']);
-    Route::put('/goals/{goal}/share', [\App\Http\Controllers\Goal\GoalController::class, 'updateShareSettings']);
+    Route::get('/goals', [GoalController::class, 'index']);
+    Route::post('/goals', [GoalController::class, 'store']);
+    Route::get('/goals/{goal}', [GoalController::class, 'show']);
+    Route::put('/goals/{goal}', [GoalController::class, 'update']);
+    Route::delete('/goals/{goal}', [GoalController::class, 'destroy']);
+    Route::post('/goals/{goal}/collaborators', [GoalController::class, 'addCollaborator']);
+    Route::delete('/goals/{goal}/collaborators/{userId}', [GoalController::class, 'removeCollaborator']);
+    Route::put('/goals/{goal}/share', [GoalController::class, 'updateShareSettings']);
 
     // Notes
-    Route::get('/notes', [\App\Http\Controllers\Note\NoteController::class, 'index']);
-    Route::post('/notes', [\App\Http\Controllers\Note\NoteController::class, 'store']);
-    Route::get('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'show']);
-    Route::put('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'update']);
-    Route::delete('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'destroy']);
+    Route::get('/notes', [NoteController::class, 'index']);
+    Route::post('/notes', [NoteController::class, 'store']);
+    Route::get('/notes/{note}', [NoteController::class, 'show']);
+    Route::put('/notes/{note}', [NoteController::class, 'update']);
+    Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
 
     // Events
-    Route::get('/events', [\App\Http\Controllers\Event\EventController::class, 'index']);
-    Route::post('/events', [\App\Http\Controllers\Event\EventController::class, 'store']);
-    Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
-    Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
-    Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
-
-    // Goal management
-    Route::get('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'index']);
-    Route::post('/goals', [\App\Http\Controllers\Goal\GoalController::class, 'store']);
-    Route::get('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'show']);
-    Route::put('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'update']);
-    Route::delete('/goals/{goal}', [\App\Http\Controllers\Goal\GoalController::class, 'destroy']);
-    Route::post('/goals/{goal}/collaborators', [\App\Http\Controllers\Goal\GoalController::class, 'addCollaborator']);
-    Route::delete('/goals/{goal}/collaborators/{userId}', [\App\Http\Controllers\Goal\GoalController::class, 'removeCollaborator']);
-    Route::put('/goals/{goal}/share', [\App\Http\Controllers\Goal\GoalController::class, 'updateShareSettings']);
-
-    // Notes
-    Route::get('/notes', [\App\Http\Controllers\Note\NoteController::class, 'index']);
-    Route::post('/notes', [\App\Http\Controllers\Note\NoteController::class, 'store']);
-    Route::get('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'show']);
-    Route::put('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'update']);
-    Route::delete('/notes/{note}', [\App\Http\Controllers\Note\NoteController::class, 'destroy']);
-
-    // Events
-    Route::get('/events', [\App\Http\Controllers\Event\EventController::class, 'index']);
-    Route::post('/events', [\App\Http\Controllers\Event\EventController::class, 'store']);
-    Route::get('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'show']);
-    Route::put('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'update']);
-    Route::delete('/events/{event}', [\App\Http\Controllers\Event\EventController::class, 'destroy']);
+    Route::get('/events', [EventController::class, 'index']);
+    Route::post('/events', [EventController::class, 'store']);
+    Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::put('/events/{event}', [EventController::class, 'update']);
+    Route::delete('/events/{event}', [EventController::class, 'destroy']);
 
     // Milestones
-    Route::get('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'index']);
-    Route::post('/goals/{goal}/milestones', [\App\Http\Controllers\Milestone\MilestoneController::class, 'store']);
-    Route::get('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'show']);
-    Route::put('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'update']);
-    Route::delete('/milestones/{milestone}', [\App\Http\Controllers\Milestone\MilestoneController::class, 'destroy']);
+    Route::get('/goals/{goal}/milestones', [MilestoneController::class, 'index']);
+    Route::post('/goals/{goal}/milestones', [MilestoneController::class, 'store']);
+    Route::get('/milestones/{milestone}', [MilestoneController::class, 'show']);
+    Route::put('/milestones/{milestone}', [MilestoneController::class, 'update']);
+    Route::delete('/milestones/{milestone}', [MilestoneController::class, 'destroy']);
 
     // Files
-    Route::get('/files', [\App\Http\Controllers\File\FileController::class, 'index']);
-    Route::post('/files', [\App\Http\Controllers\File\FileController::class, 'store']);
-    Route::get('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'show']);
-    Route::delete('/files/{file}', [\App\Http\Controllers\File\FileController::class, 'destroy']);
-
+    Route::get('/files', [FileController::class, 'index']);
+    Route::post('/files', [FileController::class, 'store']);
+    Route::get('/files/{file}', [FileController::class, 'show']);
+    Route::delete('/files/{file}', [FileController::class, 'destroy']);
 
 });
+
 // =======================================================
 // --- PUBLIC CALLBACK ROUTES ---
 // =======================================================
 
-// Route IPN vẫn giữ lại để dùng sau này.
 Route::any('/payment/vnpay/callback', [PaymentController::class, 'handleVnPayCallback'])->name('payment.vnpay_ipn_callback');
