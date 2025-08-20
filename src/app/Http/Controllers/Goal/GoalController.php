@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule; // <-- Import Rule để validation tốt hơn
+use Illuminate\Validation\Rule;
 
 class GoalController extends Controller
 {
@@ -25,12 +25,15 @@ class GoalController extends Controller
     {
         // Load các quan hệ từ DB
         $goal->load([
-            'milestones', 
-            'progress', 
-            // 'share' là hasOne, nhưng frontend mong đợi một mảng 'shares'
-            // 'collaborations' là hasMany, nhưng frontend mong đợi 'collaborators'
-            'share', 
-            'collaborations.user' // Lấy cả thông tin user của collaborator
+            'milestones',
+            'progress',
+            'notes',
+            'files',
+            'events',
+            'aiSuggestions',
+            'share',
+            'collaborations',
+            'collaborations.user'
         ]);
     
         // ---- BIẾN ĐỔI DỮ LIỆU ĐỂ PHÙ HỢP VỚI FRONTEND ----
