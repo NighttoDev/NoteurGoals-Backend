@@ -102,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Goal management
     Route::get('/goals', [GoalController::class, 'index']);
     Route::post('/goals', [GoalController::class, 'store']);
+    Route::get('/goals/trash', [GoalController::class, 'trashed'])->name('goals.trashed');
     Route::get('/goals/{goal}', [GoalController::class, 'show']);
     Route::put('/goals/{goal}', [GoalController::class, 'update']);
     Route::delete('/goals/{goal}', [GoalController::class, 'destroy']);
@@ -109,19 +110,43 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/goals/{goal}/collaborators/{userId}', [GoalController::class, 'removeCollaborator']);
     Route::put('/goals/{goal}/share', [GoalController::class, 'updateShareSettings']);
 
+    // --- [MỚI] Các route cho Thùng rác (Trash) của Goals ---
+    // URL được đổi thành 'goals-trash' để khớp với frontend
+    Route::get('/goals-trash', [GoalController::class, 'trashed'])->name('goals.trashed');
+    Route::post('/goals-trash/{goal}/restore', [GoalController::class, 'restore'])->name('goals.restore');
+    Route::delete('/goals-trash/{goal}', [GoalController::class, 'forceDelete'])->name('goals.forceDelete');
     // Notes
     Route::get('/notes', [NoteController::class, 'index']);
     Route::post('/notes', [NoteController::class, 'store']);
     Route::get('/notes/{note}', [NoteController::class, 'show']);
     Route::put('/notes/{note}', [NoteController::class, 'update']);
     Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
+    Route::post('/notes/{note}/goals/sync', [NoteController::class, 'syncGoals']);
+     // 1. Route để XÓA MỀM (chuyển note vào thùng rác)
+    Route::post('/notes/{note}/soft-delete', [NoteController::class, 'softDelete'])->name('notes.softDelete');
+    // 2. Các route để quản lý thùng rác
+    Route::prefix('notes-trash')->name('notes.trash.')->group(function () {
+        // Lấy danh sách các ghi chú trong thùng rác
+        Route::get('/', [NoteController::class, 'trashed'])->name('index');
+        // Khôi phục một ghi chú từ thùng rác
+        Route::post('/{id}/restore', [NoteController::class, 'restore'])->name('restore');
+        // Xóa vĩnh viễn một ghi chú khỏi thùng rác
+        Route::delete('/{id}', [NoteController::class, 'forceDeleteFromTrash'])->name('forceDelete');
+    });
 
     // Events
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
     Route::get('/events/{event}', [EventController::class, 'show']);
     Route::put('/events/{event}', [EventController::class, 'update']);
-    Route::delete('/events/{event}', [EventController::class, 'destroy']);
+    // Route này giờ đã thực hiện chức năng XÓA MỀM
+    Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
+    // 1. Route để lấy danh sách các event trong thùng rác
+    Route::get('/events-trash', [EventController::class, 'trashed'])->name('events.trashed');
+    // 2. Route để khôi phục một event từ thùng rác
+    Route::post('/events-trash/{id}/restore', [EventController::class, 'restore'])->name('events.restore');
+    // 3. Route để XÓA VĨNH VIỄN một event (dành cho Admin hoặc khi xóa từ thùng rác)
+    Route::delete('/events-trash/{id}/force-delete', [EventController::class, 'forceDelete'])->name('events.forceDelete');
 
     // Milestones
     Route::get('/goals/{goal}/milestones', [MilestoneController::class, 'index']);

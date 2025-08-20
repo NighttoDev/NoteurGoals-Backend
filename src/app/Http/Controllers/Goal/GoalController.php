@@ -222,7 +222,77 @@ class GoalController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $goal->delete();
-        return response()->json(null, 204); // 204 No Content là response chuẩn cho delete
+        $goal->milestones()->delete();
+        return response()->json(['message' => 'Goal moved to trash successfully.'], 204); // 204 No Content là response chuẩn cho delete
+    }
+
+    /**
+     * [MỚI] - Hiển thị danh sách các goals đã bị xóa mềm (trong thùng rác).
+     */
+    public function trashed()
+    {
+        $trashedGoals = Auth::user()->goals()
+                               ->onlyTrashed() // Chỉ lấy các mục đã xóa mềm
+                               ->orderBy('deleted_at', 'desc')
+                               ->paginate(10);
+
+        // Chúng ta không cần load relations phức tạp ở đây vì chỉ cần title và deleted_at
+        return response()->json($trashedGoals);
+    }
+
+    /**
+     * [MỚI] - Khôi phục một goal từ thùng rác.
+     * Lưu ý: $goalId được truyền từ URL, không phải Route Model Binding.
+     */
+    public function restore($goalId)
+    {
+        $goal = Auth::user()->goals()->onlyTrashed()->findOrFail($goalId);
+        
+        $goal->restore();
+
+        // [NÂNG CAO] Khôi phục các Milestones của goal đó
+        $goal->milestones()->onlyTrashed()->restore(); 
+
+        // Định dạng lại goal đã khôi phục để trả về
+        $formattedGoal = $this->loadGoalRelations($goal);
+
+        return response()->json([
+            'message' => 'Goal restored successfully',
+            'data' => $formattedGoal
+        ]);
+    }
+
+    /**
+     * [MỚI] - Xóa vĩnh viễn một goal ĐÃ NẰM TRONG THÙNG RÁC.
+     */
+    public function forceDelete($goalId)
+    {
+        $goal = Auth::user()->goals()->onlyTrashed()->find($goalId);
+
+        if (!$goal) {
+            return response()->json(['message' => 'Goal not found in trash'], 404);
+        }
+
+        // BẮT BUỘC: Dọn dẹp tất cả các bảng liên quan trước khi xóa vĩnh viễn
+        DB::transaction(function () use ($goal) {
+            $goal->notes()->detach(); // Xóa liên kết trong bảng goal_note
+            $goal->collaborations()->delete(); // Xóa các record cộng tác viên
+            $goal->share()->delete(); // Xóa record chia sẻ
+            $goal->progress()->delete(); // Xóa record tiến độ
+            
+            // QUAN TRỌNG: Xóa vĩnh viễn các milestones con
+            // Phải dùng vòng lặp nếu milestones có các quan hệ con khác cần xóa
+            $goal->milestones()->onlyTrashed()->each(function($milestone) {
+                // Giả sử milestone không có quan hệ phức tạp
+                $milestone->forceDelete();
+            });
+            
+            // Cuối cùng, xóa vĩnh viễn chính goal đó
+            $goal->forceDelete();
+        });
+
+        return response()->json(['message' => 'Goal has been permanently deleted.']);
+
     }
 
     // Các hàm addCollaborator, removeCollaborator, getAllCollaborators có thể giữ nguyên
