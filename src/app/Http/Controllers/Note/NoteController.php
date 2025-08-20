@@ -70,9 +70,8 @@ class NoteController extends Controller
     }
 
     /**
-     * [THAY ĐỔI] - XÓA VĨNH VIỄN một ghi chú.
-     * Hàm này sẽ xóa hoàn toàn ghi chú khỏi cơ sở dữ liệu.
-     * Nên được bảo vệ và chỉ dành cho Admin hoặc hành động có chủ đích.
+     * XÓA MỀM một ghi chú qua route DELETE /notes/{note} (giống Goals::destroy).
+     * Ghi chú sẽ được chuyển vào thùng rác (SoftDeletes).
      */
     public function destroy(Note $note)
     {
@@ -80,15 +79,11 @@ class NoteController extends Controller
         if ($note->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        
-        // 1. Xóa các liên kết trong bảng trung gian
-        $note->goals()->detach();
-        $note->milestones()->detach();
 
-        // 2. Sử dụng forceDelete() để xóa vĩnh viễn
-        $note->forceDelete(); 
+        // Xóa mềm đưa vào thùng rác
+        $note->delete();
 
-        return response()->json(['message' => 'Note has been permanently deleted.']);
+        return response()->json(['message' => 'Note moved to trash successfully']);
     }
 
     // ===================================================================

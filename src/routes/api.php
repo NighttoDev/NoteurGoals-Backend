@@ -94,10 +94,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/notes/{note}/goals/{goalId}', [NoteController::class, 'unlinkGoal']);
     Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
     Route::delete('/notes/{note}/milestones/{milestoneId}', [NoteController::class, 'unlinkMilestone']);
+    Route::post('/notes/{noteId}/goals/sync', [NoteController::class, 'syncGoals']);
 
     // Quản lý Thùng rác (Trash) của Notes
     Route::get('/notes-trash', [NoteController::class, 'trashed'])->name('notes.trash.index');
     Route::post('/notes-trash/{id}/restore', [NoteController::class, 'restore'])->name('notes.trash.restore');
+    Route::post('/notes-trash/{id}/soft-delete', [NoteController::class, 'softDelete'])->name('notes.trash.softDelete');
     Route::delete('/notes-trash/{id}', [NoteController::class, 'forceDeleteFromTrash'])->name('notes.trash.forceDelete');
 
 
