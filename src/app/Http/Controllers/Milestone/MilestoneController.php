@@ -36,12 +36,12 @@ class MilestoneController extends Controller
         }
 
         $milestone = Milestone::create([
-            'goal_id' => $goal->id,
+            'goal_id' => $goal->goal_id,
             'title' => $request->title,
             'deadline' => $request->deadline,
             'is_completed' => false,
         ]);
-
+        $goal->updateStatus();
         return response()->json(['message' => 'Milestone created', 'milestone' => $milestone], 201);
     }
 

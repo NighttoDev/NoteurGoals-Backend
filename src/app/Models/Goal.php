@@ -32,7 +32,11 @@ class Goal extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
-
+    public function getRouteKeyName()
+    {
+        return 'goal_id';
+    }
+    
     // Relationships
     public function user(): BelongsTo
     {

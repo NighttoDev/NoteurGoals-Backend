@@ -30,6 +30,11 @@ class Milestone extends Model
         'updated_at' => 'datetime',
     ];
 
+    public function getRouteKeyName()
+    {
+        return 'milestone_id';
+    }
+
     public function goal(): BelongsTo
     {
         return $this->belongsTo(Goal::class, 'goal_id', 'goal_id');
