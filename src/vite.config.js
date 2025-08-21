@@ -11,6 +11,6 @@ export default defineConfig({
         react(),
     ],
     server: {
-        host: os.networkInterfaces().eth0?.[0].address,
+        host: process.env.LARAVEL_SAIL ? Object.values(os.networkInterfaces()).flat().find(info => info?.internal === false)?.address : undefined,
     },
 });
