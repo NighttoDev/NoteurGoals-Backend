@@ -80,8 +80,63 @@ class EventController extends Controller
 
         $event->delete();
 
-        return response()->json(['message' => 'Event deleted successfully']);
+        return response()->json(['message' => 'Event moved to trash successfully']);
     }
+    
+        // ===================================================================
+        // CÁC CHỨC NĂNG MỚI CHO THÙNG RÁC CỦA EVENT
+        // ===================================================================
+    
+        /**
+         * [MỚI] - Hiển thị danh sách các event đã bị xóa mềm.
+         */
+        public function trashed()
+        {
+            $trashedEvents = Auth::user()->events()
+                                ->onlyTrashed() // <-- Lấy các mục đã bị xóa mềm
+                                ->latest('deleted_at') // Sắp xếp theo ngày xóa mới nhất
+                                ->paginate(10);
+    
+            return response()->json($trashedEvents);
+        }
+    
+        /**
+         * [MỚI] - Khôi phục một event từ thùng rác.
+         */
+        public function restore($id)
+        {
+            // Tìm event TRONG THÙNG RÁC của user để đảm bảo bảo mật
+            $event = Auth::user()->events()->onlyTrashed()->find($id);
+    
+            if (!$event) {
+                return response()->json(['message' => 'Event not found in trash'], 404);
+            }
+    
+            $event->restore(); // <-- Khôi phục event
+    
+            return response()->json(['message' => 'Event restored successfully', 'event' => $event]);
+        }
+    
+        /**
+         * [MỚI] - Xóa vĩnh viễn một event.
+         * Hàm này có thể được dùng cho Admin hoặc khi người dùng xóa từ thùng rác.
+         */
+        public function forceDelete($id)
+        {
+            // Để xóa vĩnh viễn, chúng ta cần tìm trong cả các mục đang hoạt động và đã xóa
+            $event = Auth::user()->events()->withTrashed()->find($id);
+            
+            if (!$event) {
+                return response()->json(['message' => 'Event not found'], 404);
+            }
+    
+            // Trước khi xóa vĩnh viễn, bạn phải detach các mối quan hệ trong bảng trung gian
+            $event->goals()->detach();
+    
+            $event->forceDelete(); // <-- XÓA VĨNH VIỄN khỏi DB
+    
+            return response()->json(['message' => 'Event permanently deleted']);
+        }
 
     public function linkGoal(Request $request, Event $event)
     {

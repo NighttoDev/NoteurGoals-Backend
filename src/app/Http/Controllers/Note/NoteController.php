@@ -69,13 +69,74 @@ class NoteController extends Controller
         return response()->json(['message' => 'Note updated successfully', 'note' => $note]);
     }
 
-    public function destroy(Note $note)
+    public function softDelete(Note $note)
     {
         if ($note->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $note->delete();
-        return response()->json(['message' => 'Note deleted successfully']);
+
+        return response()->json(['message' => 'Note moved to trash successfully']);
+    }
+
+    public function destroy(Note $note)
+    {
+        if ($note->user_id !== Auth::user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $note->goals()->detach();
+        $note->milestones()->detach();
+        return response()->json(['message' => 'Note has been permanently deleted.'], 204);
+    }
+
+    /**
+     * [MỚI] - Hiển thị danh sách các notes đã bị xóa mềm (trong thùng rác).
+     */
+    public function trashed()
+    {
+        $trashedNotes = Auth::user()->notes()
+                            ->onlyTrashed() // Lấy các mục đã xóa mềm
+                            ->with('goals')
+                            ->orderBy('deleted_at', 'desc')
+                            ->paginate(10);
+
+        return response()->json($trashedNotes);
+    }
+
+    /**
+     * [MỚI] - Khôi phục một note từ thùng rác.
+     */
+    public function restore($id)
+    {
+        $note = Auth::user()->notes()->onlyTrashed()->find($id);
+
+        if (!$note) {
+            return response()->json(['message' => 'Note not found in trash'], 404);
+        }
+
+        $note->restore(); // Khôi phục note
+
+        return response()->json(['message' => 'Note restored successfully', 'note' => $note]);
+    }
+
+    /**
+     * [MỚI] - Xóa vĩnh viễn một note ĐÃ NẰM TRONG THÙNG RÁC.
+     */
+    public function forceDeleteFromTrash($id)
+    {
+        $note = Auth::user()->notes()->onlyTrashed()->find($id);
+
+        if (!$note) {
+            return response()->json(['message' => 'Note not found in trash'], 404);
+        }
+
+        // Xóa các liên kết trước
+        $note->goals()->detach();
+        $note->milestones()->detach();
+
+        $note->forceDelete(); // Xóa vĩnh viễn
+
+        return response()->json(['message' => 'Note permanently deleted from trash']);
     }
 
     public function syncGoals(Request $request, Note $note)
