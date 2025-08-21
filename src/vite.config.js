@@ -10,4 +10,7 @@ export default defineConfig({
         }),
         react(),
     ],
+    server: {
+        host: os.networkInterfaces().eth0?.[0].address,
+    },
 });
