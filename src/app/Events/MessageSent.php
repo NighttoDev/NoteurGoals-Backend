@@ -10,11 +10,9 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-
 class MessageSent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
-
     public Message $message;
 
     /**
@@ -27,7 +25,6 @@ class MessageSent implements ShouldBroadcast
 
     /**
      * Lấy kênh mà sự kiện sẽ được phát sóng trên đó.
-     * Kênh này dành riêng cho cuộc trò chuyện giữa 2 người.
      */
     public function broadcastOn(): PrivateChannel
     {

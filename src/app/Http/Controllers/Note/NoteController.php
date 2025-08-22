@@ -97,11 +97,22 @@ class NoteController extends Controller
         }
         
         // delete() khi có SoftDeletes trait sẽ là xóa mềm
+
         $note->delete();
 
         return response()->json(['message' => 'Note moved to trash successfully']);
     }
 
+
+    public function destroy(Note $note)
+    {
+        if ($note->user_id !== Auth::user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $note->goals()->detach();
+        $note->milestones()->detach();
+        return response()->json(['message' => 'Note has been permanently deleted.'], 204);
+    }
     /**
      * [MỚI] - Hiển thị danh sách các notes đã bị xóa mềm (trong thùng rác).
      */

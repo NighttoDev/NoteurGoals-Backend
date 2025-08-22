@@ -7,6 +7,29 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## NoteurGoals App – Local development with Docker
+
+The Laravel app in this folder is typically run via the top-level Docker Compose stack.
+
+### Quick commands
+```bash
+# From NoteurGoals-Backend/
+# Start dev stack
+docker-compose -f docker-compose.dev.yml up -d
+
+# Enter PHP container
+docker exec -it app_dev bash
+
+# Common Artisan commands
+php artisan migrate --seed
+php artisan route:list
+php artisan test -v
+```
+
+For a fuller list of commands, see the top-level README and TERMINAL_CHEATSHEET.md.
+
+---
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

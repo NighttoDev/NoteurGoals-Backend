@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/plans', 'plans');
         Route::get('/my-current', 'myCurrentSubscription');
         Route::post('/cancel/{subscription}', 'cancel');
+        Route::post('/renew', 'renew');
         Route::get('/plans/{plan}', 'show');
     });
 
