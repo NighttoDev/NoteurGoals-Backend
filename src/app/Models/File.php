@@ -158,4 +158,51 @@ class File extends Model
     {
         return $this->notes()->count();
     }
+
+    // Additional utility methods
+    public function getFullPath(): string
+    {
+        return storage_path('app/public/' . $this->file_path);
+    }
+
+    public function getUrl(): string
+    {
+        return url('storage/' . $this->file_path);
+    }
+
+    public function exists(): bool
+    {
+        return file_exists($this->getFullPath());
+    }
+
+    // Scopes for queries
+    public function scopeForUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    public function scopeNotDeleted($query)
+    {
+        return $query->whereNull('deleted_at');
+    }
+
+    public function scopeByType($query, $type)
+    {
+        return $query->where('file_type', 'like', "%{$type}%");
+    }
+
+    public function scopeImages($query)
+    {
+        return $query->where('file_type', 'like', 'image/%');
+    }
+
+    public function scopeDocuments($query)
+    {
+        return $query->whereIn('file_type', [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'text/plain'
+        ]);
+    }
 }
