@@ -69,18 +69,18 @@ class NoteController extends Controller
         return response()->json(['message' => 'Note updated successfully', 'note' => $note]);
     }
 
-    public function destroy(Note $note)
-    {
-        // Kiểm tra quyền sở hữu
-        if ($note->user_id !== Auth::user()->user_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
+    // public function destroy(Note $note)
+    // {
+    //     // Kiểm tra quyền sở hữu
+    //     if ($note->user_id !== Auth::user()->user_id) {
+    //         return response()->json(['message' => 'Unauthorized'], 403);
+    //     }
 
-        // Xóa mềm đưa vào thùng rác
-        $note->delete();
+    //     // Xóa mềm đưa vào thùng rác
+    //     $note->delete();
 
-        return response()->json(['message' => 'Note moved to trash successfully']);
-    }
+    //     return response()->json(['message' => 'Note moved to trash successfully']);
+    // }
 
     // ===================================================================
     // CÁC CHỨC NĂNG MỚI ĐƯỢC THÊM
