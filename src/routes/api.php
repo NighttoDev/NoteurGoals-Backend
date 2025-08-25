@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/plans', 'plans');
         Route::get('/my-current', 'myCurrentSubscription');
         Route::post('/cancel/{subscription}', 'cancel');
+        Route::post('/renew', 'renew');
         Route::get('/plans/{plan}', 'show');
     });
 
@@ -122,11 +123,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notes/{note}/milestones', [NoteController::class, 'linkMilestone']);
     Route::delete('/notes/{note}/milestones/{milestoneId}', [NoteController::class, 'unlinkMilestone']);
 
-    // Route::get('/notes', [NoteController::class, 'index']);
-    // Route::post('/notes', [NoteController::class, 'store']);
-    // Route::get('/notes/{note}', [NoteController::class, 'show']);
-    // Route::put('/notes/{note}', [NoteController::class, 'update']);
-    // Route::delete('/notes/{note}', [NoteController::class, 'destroy']);
     Route::post('/notes/{note}/goals/sync', [NoteController::class, 'syncGoals']);
 
     Route::prefix('notes-trash')->name('notes.trash.')->group(function () {
@@ -143,11 +139,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/events/{event}/goals', [EventController::class, 'linkGoal']);
     Route::delete('/events/{event}/goals/{goalId}', [EventController::class, 'unlinkGoal']);
 
-    // Route::get('/events', [EventController::class, 'index']);
-    // Route::post('/events', [EventController::class, 'store']);
-    // Route::get('/events/{event}', [EventController::class, 'show']);
-    // Route::put('/events/{event}', [EventController::class, 'update']);
-    // Route này giờ đã thực hiện chức năng XÓA MỀM
     Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
     // 1. Route để lấy danh sách các event trong thùng rác
     Route::get('/events-trash', [EventController::class, 'trashed'])->name('events.trashed');
@@ -165,17 +156,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/milestones/{milestone}', [MilestoneController::class, 'update']);
     Route::delete('/milestones/{milestone}', [MilestoneController::class, 'destroy']);
 
-    // Files
-    Route::apiResource('files', FileController::class)->except(['update']);
+    // Files - Chỉ giữ một bộ routes
+    Route::get('/files', [FileController::class, 'index']);
+    Route::post('/files', [FileController::class, 'store']);
+    Route::get('/files/trash', [FileController::class, 'trashed']); // Di chuyển lên trước {file}
+    Route::get('/files/{file}', [FileController::class, 'show']);
+    Route::delete('/files/{file}', [FileController::class, 'destroy']);
+    Route::get('/files/{file}/with-links', [FileController::class, 'showWithLinks']);
+    Route::get('/files/{file}/download', [FileController::class, 'download']);
+    
+    // File linking routes
     Route::post('/files/{file}/goals', [FileController::class, 'linkGoal']);
     Route::delete('/files/{file}/goals/{goalId}', [FileController::class, 'unlinkGoal']);
-    Route::post('/files/{file}/milestones', [FileController::class, 'linkMilestone']);
-    Route::delete('/files/{file}/milestones/{milestoneId}', [FileController::class, 'unlinkMilestone']);
-    // Route::get('/files', [FileController::class, 'index']);
-    // Route::post('/files', [FileController::class, 'store']);
-    // Route::get('/files/{file}', [FileController::class, 'show']);
-    // Route::delete('/files/{file}', [FileController::class, 'destroy']);
-
+    Route::post('/files/{file}/notes', [FileController::class, 'linkNote']);
+    Route::delete('/files/{file}/notes/{noteId}', [FileController::class, 'unlinkNote']);
+    
+    // File trash routes
+    Route::post('/files/{file}/restore', [FileController::class, 'restore']);
+    
+    // Goals and Notes for linking
+    Route::get('/goals', [GoalController::class, 'index']);
+    Route::get('/notes', [NoteController::class, 'index']);
 });
 
 // =======================================================

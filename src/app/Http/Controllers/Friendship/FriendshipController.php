@@ -18,7 +18,8 @@ class FriendshipController extends Controller
      */
     public function index(Request $request)
     {
-        $currentUserId = Auth::id();
+        // Auth::id() sẽ tự động lấy khóa chính, nên nó sẽ trả về giá trị của 'user_id'
+        $currentUserId = Auth::id(); 
 
         $acceptedFriendships = Friendship::where('status', 'accepted')
             ->where(function ($query) use ($currentUserId) {
@@ -54,6 +55,25 @@ class FriendshipController extends Controller
             ];
         });
 
+        $pendingFriendships = Friendship::where('status', 'pending')
+            ->where(function ($query) use ($currentUserId) {
+                $query->where('user_id_1', $currentUserId)
+                      ->orWhere('user_id_2', $currentUserId);
+            })
+            ->with(['user1', 'user2'])
+            ->get();            
+        $friends = $acceptedFriendships->map(function ($friendship) use ($currentUserId) {
+            $friendUser = $friendship->user_id_1 === $currentUserId ? $friendship->user2 : $friendship->user1;
+            return [
+                'friendship_id' => $friendship->friendship_id,
+                'id' => $friendUser->user_id, // Khóa chính
+                'name' => $friendUser->display_name, // Tên hiển thị
+                'email' => $friendUser->email,
+                'avatar' => $friendUser->avatar_url, // URL ảnh đại diện
+            ];
+        });
+
+        // 2. Lấy danh sách LỜI MỜI (status = 'pending')
         $pendingFriendships = Friendship::where('status', 'pending')
             ->where(function ($query) use ($currentUserId) {
                 $query->where('user_id_1', $currentUserId)
@@ -124,6 +144,7 @@ class FriendshipController extends Controller
      */
     public function respond(Request $request, Friendship $friendship)
     {
+        // Auth::user()->user_id sẽ lấy giá trị khóa chính của user đang đăng nhập
         if ($friendship->user_id_2 !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -174,7 +195,7 @@ class FriendshipController extends Controller
         }
 
         $searchQuery = $request->input('query');
-        $currentUserId = Auth::id();
+        $currentUserId = Auth::id(); // Trả về giá trị của cột khóa chính 'user_id'
 
         $existingRelations = Friendship::where('user_id_1', $currentUserId)
             ->orWhere('user_id_2', $currentUserId)

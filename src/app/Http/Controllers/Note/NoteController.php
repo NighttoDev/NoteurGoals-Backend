@@ -69,15 +69,40 @@ class NoteController extends Controller
         return response()->json(['message' => 'Note updated successfully', 'note' => $note]);
     }
 
+    // public function destroy(Note $note)
+    // {
+    //     // Kiểm tra quyền sở hữu
+    //     if ($note->user_id !== Auth::user()->user_id) {
+    //         return response()->json(['message' => 'Unauthorized'], 403);
+    //     }
+
+    //     // Xóa mềm đưa vào thùng rác
+    //     $note->delete();
+
+    //     return response()->json(['message' => 'Note moved to trash successfully']);
+    // }
+
+    // ===================================================================
+    // CÁC CHỨC NĂNG MỚI ĐƯỢC THÊM
+    // ===================================================================
+
+    /**
+     * [MỚI] - XÓA MỀM một ghi chú (chuyển vào thùng rác).
+     * Đây là chức năng xóa mặc định cho người dùng.
+     */
     public function softDelete(Note $note)
     {
         if ($note->user_id !== Auth::user()->user_id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        
+        // delete() khi có SoftDeletes trait sẽ là xóa mềm
+
         $note->delete();
 
         return response()->json(['message' => 'Note moved to trash successfully']);
     }
+
 
     public function destroy(Note $note)
     {
@@ -88,7 +113,6 @@ class NoteController extends Controller
         $note->milestones()->detach();
         return response()->json(['message' => 'Note has been permanently deleted.'], 204);
     }
-
     /**
      * [MỚI] - Hiển thị danh sách các notes đã bị xóa mềm (trong thùng rác).
      */
@@ -138,6 +162,7 @@ class NoteController extends Controller
 
         return response()->json(['message' => 'Note permanently deleted from trash']);
     }
+
 
     public function syncGoals(Request $request, Note $note)
     {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Subscription;
 use App\Http\Controllers\Controller;
 use App\Models\SubscriptionPlan;
 use App\Models\UserSubscription;
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -13,6 +14,77 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
+    // Lấy thông tin chi tiết của một gói đăng ký.
+    public function show($planId)
+    {
+        try {
+            $plan = SubscriptionPlan::findOrFail($planId);
+            return response()->json($plan);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Subscription plan not found.'], 404);
+        } catch (\Exception $e) {
+            Log::error('Error in SubscriptionController@show for plan ID ' . $planId . ': ' . $e->getMessage());
+            return response()->json(['message' => 'An internal server error occurred.'], 500);
+        }
+    }
+
+    /**
+     * Gia hạn gói đăng ký đang active của người dùng hiện tại.
+     * Không thay đổi cấu hình hay tích hợp cổng thanh toán.
+     * POST /api/subscriptions/renew
+     */
+    public function renew(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            $subscription = UserSubscription::where('user_id', $user->user_id)
+                ->where('payment_status', 'active')
+                ->orderByDesc('end_date')
+                ->first();
+
+            if (!$subscription) {
+                return response()->json(['message' => 'No active subscription found.'], 404);
+            }
+
+            $plan = SubscriptionPlan::find($subscription->plan_id);
+            if (!$plan) {
+                return response()->json(['message' => 'Subscription plan not found.'], 404);
+            }
+
+            // Tạo bản ghi thanh toán thành công (giả lập, không chỉnh config)
+            $payment = Payment::create([
+                'user_id' => $user->user_id,
+                'plan_id' => $plan->plan_id,
+                'amount' => $plan->price,
+                'payment_date' => now(),
+                'status' => 'success',
+            ]);
+
+            // Tính ngày bắt đầu gia hạn và ngày kết thúc mới
+            $today = Carbon::today();
+            $start = $today->greaterThan($subscription->end_date)
+                ? $today
+                : Carbon::parse($subscription->end_date);
+            $newEnd = (clone $start)->addMonths($plan->duration);
+
+            // Cập nhật subscription (chỉ cập nhật end_date để đảm bảo tương thích với cả 2 schema SQL)
+            $subscription->end_date = $newEnd->toDateString();
+            $subscription->save();
+
+            return response()->json([
+                'message' => 'Subscription renewed successfully.',
+                'subscription' => $subscription->fresh('plan'),
+                'payment' => $payment,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error renewing subscription: ' . $e->getMessage());
+            return response()->json(['message' => 'An internal server error occurred.'], 500);
+        }
+    }
     /**
      * Lấy tất cả các gói đăng ký có sẵn.
      * GET /api/subscriptions/plans
@@ -20,29 +92,6 @@ class SubscriptionController extends Controller
     public function plans()
     {
         return response()->json(SubscriptionPlan::all());
-    }
-
-    // *** MỚI: Thêm phương thức show() bị thiếu ***
-    /**
-     * Lấy thông tin chi tiết của một gói đăng ký.
-     * GET /api/subscriptions/plans/{planId}
-     */
-    public function show($planId)
-    {
-        try {
-            // Tìm plan theo ID, nếu không thấy sẽ tự động báo lỗi
-            $plan = SubscriptionPlan::findOrFail($planId); 
-            
-            return response()->json($plan);
-
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            // Trả về lỗi 404 chuẩn nếu không tìm thấy plan
-            return response()->json(['message' => 'Subscription plan not found.'], 404);
-        } catch (\Exception $e) {
-            // Ghi lại các lỗi bất ngờ khác
-            Log::error('Error in SubscriptionController@show for plan ID ' . $planId . ': ' . $e->getMessage());
-            return response()->json(['message' => 'An internal server error occurred.'], 500);
-        }
     }
 
 
