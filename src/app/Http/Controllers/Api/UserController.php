@@ -39,8 +39,10 @@ class UserController extends Controller
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'display_name' => 'sometimes|required|string|max:100',
+            'display_name' => ['sometimes','required','string','max:100','regex:/^(?!.*\\d).+$/u'],
             'avatar' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // max 5MB
+        ], [
+            'display_name.regex' => 'Display names that do not contain numbers.'
         ]);
 
         if ($validator->fails()) {
