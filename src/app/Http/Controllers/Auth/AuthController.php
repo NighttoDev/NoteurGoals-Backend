@@ -23,10 +23,13 @@ class AuthController extends Controller
  public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'display_name' => 'required|string|max:100',
+            'display_name' => ['required','string','max:100','regex:/^(?!.*\\d).+$/u'],
             'email' => 'required|string|email|max:100|unique:Users,email',
             'password' => 'required|string|min:8|confirmed',
+        ], [
+            'display_name.regex' => 'Full name does not contain numbers.',
         ]);
+
 
         if ($validator->fails()) {
             return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);

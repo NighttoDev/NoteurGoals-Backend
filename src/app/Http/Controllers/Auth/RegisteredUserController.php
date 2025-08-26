@@ -31,9 +31,12 @@ class RegisteredUserController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'display_name' => 'required|string|max:255',
+            // Ensure full name contains no digits
+            'display_name' => ['required','string','max:255','regex:/^(?!.*\\d).+$/u'],
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password_hash' => ['required', 'confirmed', Rules\Password::defaults()],
+        ], [
+            'display_name.regex' => 'Full name does not contain numbers.'
         ]);
 
         $user = User::create([
