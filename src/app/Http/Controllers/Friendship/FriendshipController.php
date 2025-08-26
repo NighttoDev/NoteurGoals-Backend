@@ -55,23 +55,6 @@ class FriendshipController extends Controller
             ];
         });
 
-        $pendingFriendships = Friendship::where('status', 'pending')
-            ->where(function ($query) use ($currentUserId) {
-                $query->where('user_id_1', $currentUserId)
-                      ->orWhere('user_id_2', $currentUserId);
-            })
-            ->with(['user1', 'user2'])
-            ->get();            
-        $friends = $acceptedFriendships->map(function ($friendship) use ($currentUserId) {
-            $friendUser = $friendship->user_id_1 === $currentUserId ? $friendship->user2 : $friendship->user1;
-            return [
-                'friendship_id' => $friendship->friendship_id,
-                'id' => $friendUser->user_id, // Khóa chính
-                'name' => $friendUser->display_name, // Tên hiển thị
-                'email' => $friendUser->email,
-                'avatar' => $friendUser->avatar_url, // URL ảnh đại diện
-            ];
-        });
 
         // 2. Lấy danh sách LỜI MỜI (status = 'pending')
         $pendingFriendships = Friendship::where('status', 'pending')
