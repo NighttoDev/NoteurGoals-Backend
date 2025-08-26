@@ -227,12 +227,77 @@ class FileController extends Controller
                 ], 404);
             }
 
-            return response()->download($filePath, $file->file_name);
+            // Force download với headers phù hợp
+            return response()->download($filePath, $file->file_name, [
+                'Content-Type' => $file->file_type,
+                'Content-Disposition' => 'attachment; filename="' . $file->file_name . '"',
+                'Cache-Control' => 'no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0'
+            ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error downloading file: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error downloading file: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Preview file (for supported file types)
+     */
+    public function preview($fileId)
+    {
+        try {
+            $user = auth('sanctum')->user();
+            
+            $file = DB::table('Files')
+                ->where('file_id', $fileId)
+                ->where('user_id', $user->user_id)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$file) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found or access denied'
+                ], 404);
+            }
+
+            $filePath = storage_path('app/public/' . $file->file_path);
+            
+            if (!file_exists($filePath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found on server'
+                ], 404);
+            }
+
+            // Kiểm tra file có thể preview được không
+            $extension = strtolower(pathinfo($file->file_name, PATHINFO_EXTENSION));
+            $previewableExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'txt', 'html', 'css', 'js'];
+            
+            if (!in_array($extension, $previewableExtensions)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File type not supported for preview. Please download the file.',
+                    'download_url' => '/api/files/' . $fileId . '/download'
+                ], 422);
+            }
+
+            // Trả về file để preview
+            return response()->file($filePath, [
+                'Content-Type' => $file->file_type,
+                'Cache-Control' => 'public, max-age=3600',
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error previewing file: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error previewing file: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -644,6 +709,55 @@ class FileController extends Controller
                 'success' => false,
                 'message' => 'Error retrieving trashed files: ' . $e->getMessage()
             ], 500);
+        }
+    }
+    
+    public function getPublicFile($fileId)
+    {
+        try {
+            $file = DB::table('Files')
+                ->where('file_id', $fileId)
+                ->whereNull('deleted_at')
+                ->first();
+                
+            if (!$file) {
+                abort(404, 'File not found');
+            }
+            
+            $filePath = storage_path('app/public/' . $file->file_path);
+            
+            if (!file_exists($filePath)) {
+                abort(404, 'File not found on server');
+            }
+            
+            // Kiểm tra loại file để quyết định cách xử lý
+            $extension = strtolower(pathinfo($file->file_name, PATHINFO_EXTENSION));
+            $mimeType = $file->file_type;
+            
+            // Đối với file DOC/DOCX, PPT, PDF - force download
+            $forceDownloadExtensions = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+            
+            if (in_array($extension, $forceDownloadExtensions)) {
+                return response()->download($filePath, $file->file_name, [
+                    'Content-Type' => $mimeType,
+                    'Content-Disposition' => 'attachment; filename="' . $file->file_name . '"',
+                    'Access-Control-Allow-Origin' => '*',
+                    'Access-Control-Allow-Methods' => 'GET',
+                    'Access-Control-Allow-Headers' => 'Content-Type',
+                ]);
+            }
+            
+            // Đối với file ảnh, video, text - có thể preview
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Allow-Methods' => 'GET',
+                'Access-Control-Allow-Headers' => 'Content-Type',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error serving public file: ' . $e->getMessage());
+            abort(500, 'Error serving file');
         }
     }
 

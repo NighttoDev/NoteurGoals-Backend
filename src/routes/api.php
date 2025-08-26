@@ -164,6 +164,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
     Route::get('/files/{file}/with-links', [FileController::class, 'showWithLinks']);
     Route::get('/files/{file}/download', [FileController::class, 'download']);
+    Route::get('/files/{file}/preview', [FileController::class, 'preview']);
+    Route::get('/files/{file}/public', [FileController::class, 'getPublicFile']);
     
     // File linking routes
     Route::post('/files/{file}/goals', [FileController::class, 'linkGoal']);

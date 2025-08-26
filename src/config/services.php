@@ -4,17 +4,17 @@ return [
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('APP_URL', 'http://localhost:8000') . '/api/auth/google/callback-direct',
+        'redirect' => env('APP_URL', 'https://admin.noteurgoals.live') . '/api/auth/google/callback-direct',
     ],
 
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
-        'redirect' => env('APP_URL', 'http://localhost:8000') . '/api/auth/facebook/callback-direct',
+        'redirect' => env('APP_URL', 'https://admin.noteurgoals.live') . '/api/auth/facebook/callback-direct',
     ],
 
     'ai_microservice' => [
-        'url' => env('AI_MICROSERVICE_URL', 'http://localhost:8001'),
+        'url' => env('AI_MICROSERVICE_URL', 'https://admin.noteurgoals.live'),
         'timeout' => env('AI_MICROSERVICE_TIMEOUT', 30),
         'api_key' => env('AI_MICROSERVICE_API_KEY'),
         'enabled' => env('AI_MICROSERVICE_ENABLED', true),
