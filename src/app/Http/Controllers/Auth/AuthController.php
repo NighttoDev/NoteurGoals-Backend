@@ -392,7 +392,12 @@ class AuthController extends Controller
             $tokenData = $this->exchangeCodeForToken('google', $request->code);
             
             // 2. Sử dụng access token để lấy thông tin người dùng
-            $userInfoResponse = Http::withToken($tokenData['access_token'])->get('https://www.googleapis.com/oauth2/v3/userinfo');
+            // Ưu tiên OIDC userinfo endpoint để ổn định hơn
+            $userInfoResponse = Http::withToken($tokenData['access_token'])->get('https://openidconnect.googleapis.com/v1/userinfo');
+            if (!$userInfoResponse->successful()) {
+                // Fallback sang endpoint cũ nếu cần
+                $userInfoResponse = Http::withToken($tokenData['access_token'])->get('https://www.googleapis.com/oauth2/v3/userinfo');
+            }
             if (!$userInfoResponse->successful()) {
                 throw new \Exception('Failed to get user info from Google');
             }
@@ -429,8 +434,9 @@ class AuthController extends Controller
             $tokenData = $this->exchangeCodeForToken('facebook', $request->code);
             
             // 2. Sử dụng access token để lấy thông tin người dùng
+            // 2. Lấy thông tin cơ bản của người dùng
             $userInfoResponse = Http::get('https://graph.facebook.com/v18.0/me', [
-                'fields' => 'id,name,email,picture.width(200)',
+                'fields' => 'id,name,email',
                 'access_token' => $tokenData['access_token']
             ]);
             if (!$userInfoResponse->successful()) {
@@ -438,12 +444,21 @@ class AuthController extends Controller
             }
             $userData = $userInfoResponse->json();
 
+            // 2b. Lấy avatar ổn định qua endpoint picture với redirect=0 để nhận URL JSON
+            $pictureResp = Http::get('https://graph.facebook.com/v18.0/me/picture', [
+                'width' => 200,
+                'redirect' => 0,
+                'access_token' => $tokenData['access_token']
+            ]);
+            $pictureJson = $pictureResp->json();
+            $avatarUrl = $pictureJson['data']['url'] ?? null;
+
             // 3. Chuẩn hóa dữ liệu người dùng
             $socialUser = new \stdClass();
             $socialUser->id = $userData['id'] ?? null;
             $socialUser->email = $userData['email'] ?? null;
             $socialUser->name = $userData['name'] ?? 'Facebook User';
-            $socialUser->avatar = $userData['picture']['data']['url'] ?? null;
+            $socialUser->avatar = $avatarUrl;
             
             // 4. Xử lý đăng nhập hoặc đăng ký và redirect
             return $this->processSocialLogin($socialUser, 'facebook');
@@ -499,6 +514,9 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
         $user->last_login_at = now();
         $user->save();
+        
+        // Đảm bảo lấy bản ghi mới nhất từ DB (tránh cache thuộc tính cũ)
+        $user->refresh();
         $user->load('profile'); // Load profile để gửi về frontend
 
         // TỐI ƯU QUAN TRỌNG: Gửi cả token và user_info về frontend
@@ -509,7 +527,14 @@ class AuthController extends Controller
         $encodedToken = base64_encode($token);
         $encodedUser = base64_encode(json_encode($user));
 
-        $redirectUrl = "{$frontendUrl}{$callbackPath}?token={$encodedToken}&user={$encodedUser}";
+        // URL-encode để an toàn khi đính vào query string
+        $redirectUrl = sprintf(
+            '%s%s?token=%s&user=%s',
+            $frontendUrl,
+            $callbackPath,
+            urlencode($encodedToken),
+            urlencode($encodedUser)
+        );
         
         return redirect()->away($redirectUrl);
     }
@@ -521,8 +546,8 @@ class AuthController extends Controller
             $user = User::where('email', $socialUser->email)->first();
             
             if ($user) {
-                // Nếu user đã tồn tại, cập nhật avatar và loại đăng nhập nếu cần
-                if (!$user->avatar_url && $socialUser->avatar) {
+                // Cập nhật avatar nếu có URL mới từ social provider
+                if ($socialUser->avatar && $user->avatar_url !== $socialUser->avatar) {
                     $user->avatar_url = $socialUser->avatar;
                 }
                 // Nếu user đăng ký bằng email trước đó, có thể cập nhật `registration_type`
