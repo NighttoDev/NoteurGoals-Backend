@@ -12,9 +12,8 @@ class NoteController extends Controller
 {
     public function index(Request $request)
     {
-        // Sử dụng with('goals') để tải kèm các goals đã liên kết
-        $notes = Auth::user()->notes()
-                    ->with('goals') // <-- THAY ĐỔI QUAN TRỌNG Ở ĐÂY
+        $notes = Note::where('user_id', Auth::id())
+                    ->with('goals')
                     ->orderBy('created_at', 'desc')
                     ->paginate(10);
                     
@@ -33,9 +32,9 @@ class NoteController extends Controller
         }
 
         $note = Note::create([
-            'user_id' => Auth::user()->user_id,
-            'title' => $request->title,
-            'content' => $request->content,
+            'user_id' => Auth::id(),
+            'title' => $request->input('title'),
+            'content' => $request->input('content'),
         ]);
 
         return response()->json(['message' => 'Note created successfully', 'note' => $note], 201);
@@ -43,15 +42,17 @@ class NoteController extends Controller
 
     public function show(Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        // Ensure linked goals are included when fetching a single note
+        $note->load('goals');
         return response()->json($note);
     }
 
     public function update(Request $request, Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -92,7 +93,7 @@ class NoteController extends Controller
      */
     public function softDelete(Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         
@@ -106,7 +107,7 @@ class NoteController extends Controller
 
     public function destroy(Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $note->goals()->detach();
@@ -118,8 +119,8 @@ class NoteController extends Controller
      */
     public function trashed()
     {
-        $trashedNotes = Auth::user()->notes()
-                            ->onlyTrashed() // Lấy các mục đã xóa mềm
+        $trashedNotes = Note::onlyTrashed()
+                            ->where('user_id', Auth::id())
                             ->with('goals')
                             ->orderBy('deleted_at', 'desc')
                             ->paginate(10);
@@ -132,7 +133,7 @@ class NoteController extends Controller
      */
     public function restore($id)
     {
-        $note = Auth::user()->notes()->onlyTrashed()->find($id);
+        $note = Note::onlyTrashed()->where('user_id', Auth::id())->find($id);
 
         if (!$note) {
             return response()->json(['message' => 'Note not found in trash'], 404);
@@ -148,7 +149,7 @@ class NoteController extends Controller
      */
     public function forceDeleteFromTrash($id)
     {
-        $note = Auth::user()->notes()->onlyTrashed()->find($id);
+        $note = Note::onlyTrashed()->where('user_id', Auth::id())->find($id);
 
         if (!$note) {
             return response()->json(['message' => 'Note not found in trash'], 404);
@@ -167,7 +168,7 @@ class NoteController extends Controller
     public function syncGoals(Request $request, Note $note)
     {
         // 1. Kiểm tra quyền sở hữu note
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -184,7 +185,7 @@ class NoteController extends Controller
         $goalIds = $request->input('goal_ids', []);
 
         // 3. Kiểm tra quyền sở hữu của tất cả các goal được gửi lên
-        $userGoalCount = \App\Models\Goal::where('user_id', Auth::user()->user_id)
+        $userGoalCount = \App\Models\Goal::where('user_id', Auth::id())
                                           ->whereIn('goal_id', $goalIds)
                                           ->count();
         if (count($goalIds) !== $userGoalCount) {
@@ -209,7 +210,7 @@ class NoteController extends Controller
 
     public function linkGoal(Request $request, Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -223,7 +224,7 @@ class NoteController extends Controller
 
         // Check if user owns the goal
         $goal = \App\Models\Goal::find($request->goal_id);
-        if ($goal->user_id !== Auth::user()->user_id) {
+        if ($goal->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -237,7 +238,7 @@ class NoteController extends Controller
 
     public function unlinkGoal(Note $note, $goalId)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -247,7 +248,7 @@ class NoteController extends Controller
 
     public function linkMilestone(Request $request, Note $note)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -261,7 +262,7 @@ class NoteController extends Controller
 
         // Check if user owns the milestone's goal
         $milestone = \App\Models\Milestone::find($request->milestone_id);
-        if ($milestone->goal->user_id !== Auth::user()->user_id) {
+        if ($milestone->goal->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -275,7 +276,7 @@ class NoteController extends Controller
 
     public function unlinkMilestone(Note $note, $milestoneId)
     {
-        if ($note->user_id !== Auth::user()->user_id) {
+        if ($note->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

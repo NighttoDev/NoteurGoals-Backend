@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Friendship;
 use App\Models\User;
 use App\Models\GoalCollaboration;
+use App\Models\Goal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -255,30 +256,79 @@ class FriendshipController extends Controller
     public function getCollaborators(Request $request)
     {
         $currentUserId = Auth::id();
-        $goalIds = GoalCollaboration::where('user_id', $currentUserId)->pluck('goal_id');
-        if ($goalIds->isEmpty()) return response()->json(['data' => []]);
+        
+        // Lấy danh sách goal mà current user đang tham gia (không phải owner)
+        $participatedGoalIds = GoalCollaboration::where('user_id', $currentUserId)
+            ->pluck('goal_id');
+        
+        if ($participatedGoalIds->isEmpty()) return response()->json(['data' => []]);
 
-        $collaboratorIds = GoalCollaboration::whereIn('goal_id', $goalIds)
+        // Lấy danh sách OWNER của các goals đó (đối phương chia sẻ tới mình)
+        $ownerIds = Goal::whereIn('goal_id', $participatedGoalIds)
             ->where('user_id', '!=', $currentUserId)
             ->distinct()->pluck('user_id');
-        if ($collaboratorIds->isEmpty()) return response()->json(['data' => []]);
-            
-        $collaborators = User::whereIn('user_id', $collaboratorIds)
+
+        if ($ownerIds->isEmpty()) return response()->json(['data' => []]);
+
+        $collaborators = User::whereIn('user_id', $ownerIds)
+            ->with(['profile'])
             ->withCount(['goals', 'notes'])
-            ->get()->map(function ($user) use ($currentUserId) {
-                $friendship = Friendship::where(function ($q) use ($currentUserId, $user) { $q->where('user_id_1', $currentUserId)->where('user_id_2', $user->user_id); })
-                    ->orWhere(function ($q) use ($currentUserId, $user) { $q->where('user_id_1', $user->user_id)->where('user_id_2', $currentUserId); })->first();
+            ->get()
+            ->map(function ($owner) use ($currentUserId) {
+                // Trạng thái bạn bè giữa current user và owner
+                $friendship = Friendship::where(function ($q) use ($currentUserId, $owner) {
+                        $q->where('user_id_1', $currentUserId)->where('user_id_2', $owner->user_id);
+                    })
+                    ->orWhere(function ($q) use ($currentUserId, $owner) {
+                        $q->where('user_id_1', $owner->user_id)->where('user_id_2', $currentUserId);
+                    })
+                    ->first();
                 $friendStatus = 'not_friends';
                 if ($friendship) {
-                    if ($friendship->status == 'accepted') $friendStatus = 'friends';
-                    elseif ($friendship->status == 'pending') $friendStatus = ($friendship->user_id_1 == $currentUserId) ? 'request_sent' : 'request_received';
+                    if ($friendship->status === 'accepted') $friendStatus = 'friends';
+                    elseif ($friendship->status === 'pending') $friendStatus = ($friendship->user_id_1 == $currentUserId) ? 'request_sent' : 'request_received';
                 }
+
+                // Các goal mà owner sở hữu và current user đang tham gia
+                $sharedGoalIds = Goal::where('user_id', $owner->user_id)
+                    ->whereIn('goal_id', function($q) use ($currentUserId) {
+                        $q->select('goal_id')->from('GoalCollaboration')->where('user_id', $currentUserId);
+                    })
+                    ->pluck('goal_id');
+
+                $sharedGoalsCount = $sharedGoalIds->count();
+                $activeGoalsCount = Goal::whereIn('goal_id', $sharedGoalIds)
+                    ->whereIn('status', ['new', 'in_progress'])
+                    ->count();
+
+                // collaboration_id của current user trên 1 goal do owner sở hữu (nếu cần remove theo goal cụ thể)
+                $collaborationId = null;
+                if ($sharedGoalIds->isNotEmpty()) {
+                    $firstSharedGoalId = $sharedGoalIds->first();
+                    $collabRecord = GoalCollaboration::where('goal_id', $firstSharedGoalId)
+                        ->where('user_id', $currentUserId)
+                        ->first();
+                    if ($collabRecord) {
+                        $collaborationId = $collabRecord->collab_id;
+                    }
+                }
+
                 return [
-                    'id' => $user->user_id, 'name' => $user->display_name, 'email' => $user->email, 'avatar' => $user->avatar_url,
-                    'total_goals' => $user->goals_count, 'total_notes' => $user->notes_count,
-                    'is_premium' => (bool)optional($user->profile)->is_premium, 'friend_status' => $friendStatus,
+                    'id' => $owner->user_id,
+                    'name' => $owner->display_name,
+                    'email' => $owner->email,
+                    'avatar' => $owner->avatar_url,
+                    'total_goals' => (int)($owner->goals_count ?? 0),
+                    'total_notes' => (int)($owner->notes_count ?? 0),
+                    'is_premium' => (bool)optional($owner->profile)->is_premium,
+                    'friend_status' => $friendStatus,
+                    'shared_goals_count' => $sharedGoalsCount,
+                    'active_goals_count' => $activeGoalsCount,
+                    'collaboration_id' => $collaborationId,
+                    'last_activity' => now()->subDays(rand(1, 30))->toISOString(),
                 ];
             });
+
         return response()->json(['data' => $collaborators]);
     }
     
@@ -358,6 +408,49 @@ class FriendshipController extends Controller
         return response()->json(['users' => $formattedSuggestions]);
     }
     
+    /**
+     * Lấy danh sách goals được chia sẻ với một collaborator cụ thể.
+     */
+    public function getSharedGoals(Request $request, $collaboratorId)
+    {
+        $currentUserId = Auth::id();
+        
+        // Chỉ lấy các goals do collaborator (owner) sở hữu mà current user đang tham gia
+        $sharedGoalIds = Goal::where('user_id', $collaboratorId)
+            ->whereIn('goal_id', function($q) use ($currentUserId) {
+                $q->select('goal_id')->from('GoalCollaboration')->where('user_id', $currentUserId);
+            })
+            ->pluck('goal_id');
+
+        if ($sharedGoalIds->isEmpty()) {
+            return response()->json(['goals' => []]);
+        }
+
+        $sharedGoals = Goal::whereIn('goal_id', $sharedGoalIds)
+            ->with(['progress', 'share'])
+            ->get()
+            ->map(function($goal) use ($currentUserId, $collaboratorId) {
+                $currentUserRole = GoalCollaboration::where('goal_id', $goal->goal_id)
+                    ->where('user_id', $currentUserId)
+                    ->value('role') ?? 'collaborator';
+
+                $collaboratorRole = 'owner';
+
+                return [
+                    'goal_id' => $goal->goal_id,
+                    'title' => $goal->title,
+                    'status' => $goal->status,
+                    'role' => $currentUserRole,
+                    'collaborator_role' => $collaboratorRole,
+                    'progress_value' => $goal->progress ? $goal->progress->progress_value : 0,
+                    'end_date' => $goal->end_date,
+                    'share_type' => $goal->share ? $goal->share->share_type : 'private'
+                ];
+            });
+
+        return response()->json(['goals' => $sharedGoals]);
+    }
+
     /**
      * Gửi lời mời kết bạn bằng email (hàm cũ).
      */

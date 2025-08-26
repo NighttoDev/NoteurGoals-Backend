@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class FileController extends Controller
 {
@@ -17,19 +18,19 @@ class FileController extends Controller
      */
     public function store(Request $request)
     {
-        \Log::info('=== FILE UPLOAD DEBUG START ===');
+        Log::info('=== FILE UPLOAD DEBUG START ===');
         
         try {
             // Kiểm tra xác thực
             $user = auth('sanctum')->user();
             if (!$user) {
-                \Log::error('Authentication failed');
+                Log::error('Authentication failed');
                 return response()->json([
                     'message' => 'User not authenticated'
                 ], 401);
             }
             
-            \Log::info('User authenticated: ' . $user->user_id);
+            Log::info('User authenticated: ' . $user->user_id);
 
             // Validation
             $validator = Validator::make($request->all(), [
@@ -38,7 +39,7 @@ class FileController extends Controller
             ]);
 
             if ($validator->fails()) {
-                \Log::error('Validation failed:', $validator->errors()->toArray());
+                Log::error('Validation failed:', $validator->errors()->toArray());
                 return response()->json([
                     'errors' => $validator->errors()
                 ], 422);
@@ -48,7 +49,7 @@ class FileController extends Controller
             
             foreach ($request->file('files') as $file) {
                 $originalName = $file->getClientOriginalName();
-                \Log::info('Processing file: ' . $originalName);
+                Log::info('Processing file: ' . $originalName);
                 
                 // Tạo tên file unique
                 $extension = $file->getClientOriginalExtension();
@@ -73,7 +74,7 @@ class FileController extends Controller
                 $fileId = DB::table('Files')->insertGetId($fileRecord);
                 $uploadedFiles[] = array_merge($fileRecord, ['file_id' => $fileId]);
                 
-                \Log::info('File uploaded successfully: ' . $originalName . ' -> ' . $filePath);
+                Log::info('File uploaded successfully: ' . $originalName . ' -> ' . $filePath);
             }
 
             return response()->json([
@@ -83,8 +84,8 @@ class FileController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            \Log::error('Exception in file upload: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Exception in file upload: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return response()->json([
                 'success' => false,
@@ -136,7 +137,7 @@ class FileController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error retrieving files: ' . $e->getMessage());
+            Log::error('Error retrieving files: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error retrieving files: ' . $e->getMessage()
@@ -252,7 +253,7 @@ class FileController extends Controller
                 ], 401);
             }
             
-            \Log::info('Attempting to delete file ID: ' . $fileId . ' for user: ' . $user->user_id);
+            Log::info('Attempting to delete file ID: ' . $fileId . ' for user: ' . $user->user_id);
             
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
@@ -261,16 +262,14 @@ class FileController extends Controller
                 ->first();
 
             if (!$file) {
-                \Log::error('File not found or access denied for file ID: ' . $fileId);
+                Log::error('File not found or access denied for file ID: ' . $fileId);
                 return response()->json([
                     'success' => false,
                     'message' => 'File not found or access denied'
                 ], 404);
             }
 
-            // Xóa các liên kết trước
-            DB::table('FileGoalLinks')->where('file_id', $fileId)->delete();
-            DB::table('FileNoteLinks')->where('file_id', $fileId)->delete();
+            // Do NOT remove links on soft delete so they persist across restore
 
             // Soft delete the file record
             DB::table('Files')
@@ -280,12 +279,9 @@ class FileController extends Controller
                     'updated_at' => now()
                 ]);
 
-            // Delete the actual file from storage
-            if (Storage::disk('public')->exists($file->file_path)) {
-                Storage::disk('public')->delete($file->file_path);
-            }
+            // Note: Do not delete the physical file from storage on soft delete
 
-            \Log::info('File deleted successfully: ' . $fileId);
+            Log::info('File deleted successfully: ' . $fileId);
 
             return response()->json([
                 'success' => true,
@@ -293,8 +289,8 @@ class FileController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error deleting file: ' . $e->getMessage());
-            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Error deleting file: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return response()->json([
                 'success' => false,
@@ -313,7 +309,7 @@ class FileController extends Controller
             
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -392,11 +388,11 @@ class FileController extends Controller
             $goal = DB::table('Goals')
                 ->leftJoin('GoalCollaboration', function($join) use ($user) {
                     $join->on('Goals.goal_id', '=', 'GoalCollaboration.goal_id')
-                         ->where('GoalCollaboration.user_id', $user->id);
+                         ->where('GoalCollaboration.user_id', $user->user_id);
                 })
                 ->where('Goals.goal_id', $request->goal_id)
                 ->where(function($query) use ($user) {
-                    $query->where('Goals.user_id', $user->id)
+                    $query->where('Goals.user_id', $user->user_id)
                           ->orWhereNotNull('GoalCollaboration.collab_id');
                 })
                 ->whereNull('Goals.deleted_at')
@@ -453,7 +449,7 @@ class FileController extends Controller
             // Check if file exists and belongs to user
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -513,7 +509,7 @@ class FileController extends Controller
             // Check if file exists and belongs to user
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -527,7 +523,7 @@ class FileController extends Controller
             // Check if note belongs to user
             $note = DB::table('Notes')
                 ->where('note_id', $request->note_id)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -582,7 +578,7 @@ class FileController extends Controller
             // Check if file exists and belongs to user
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -628,7 +624,7 @@ class FileController extends Controller
             $user = Auth::user();
             
             $trashedFiles = DB::table('Files')
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNotNull('deleted_at')
                 ->orderBy('deleted_at', 'desc')
                 ->get();
@@ -657,7 +653,7 @@ class FileController extends Controller
             
             $file = DB::table('Files')
                 ->where('file_id', $fileId)
-                ->where('user_id', $user->id)
+                ->where('user_id', $user->user_id)
                 ->whereNotNull('deleted_at')
                 ->first();
 
@@ -684,6 +680,56 @@ class FileController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error restoring file: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function forceDelete($fileId)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Find file regardless of deleted state
+            $file = DB::table('Files')
+                ->where('file_id', $fileId)
+                ->where('user_id', $user->user_id)
+                ->first();
+
+            if (!$file) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File not found or access denied'
+                ], 404);
+            }
+
+            // Remove links
+            DB::table('FileGoalLinks')->where('file_id', $fileId)->delete();
+            DB::table('FileNoteLinks')->where('file_id', $fileId)->delete();
+
+            // Delete physical file if exists
+            if (!empty($file->file_path) && Storage::disk('public')->exists($file->file_path)) {
+                Storage::disk('public')->delete($file->file_path);
+            }
+
+            // Permanently delete the DB record
+            DB::table('Files')->where('file_id', $fileId)->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error deleting file: ' . $e->getMessage()
             ], 500);
         }
     }
