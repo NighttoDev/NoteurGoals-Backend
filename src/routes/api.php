@@ -85,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::get('/collaborators', [FriendshipController::class, 'getCollaborators']);
+    Route::get('/collaborators/{collaboratorId}/shared-goals', [FriendshipController::class, 'getSharedGoals']);
 
      // --- MESSAGES ---
     Route::prefix('messages')->controller(MessageController::class)->group(function () {
@@ -172,7 +173,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/files/{file}/notes/{noteId}', [FileController::class, 'unlinkNote']);
     
     // File trash routes
+    Route::get('/files-trash', [FileController::class, 'trashed']);
     Route::post('/files/{file}/restore', [FileController::class, 'restore']);
+    Route::delete('/files-trash/{file}', [FileController::class, 'forceDelete']);
     
     // Goals and Notes for linking
     Route::get('/goals', [GoalController::class, 'index']);

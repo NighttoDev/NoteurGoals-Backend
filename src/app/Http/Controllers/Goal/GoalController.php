@@ -234,8 +234,8 @@ class GoalController extends Controller
      */
     public function trashed()
     {
-        $trashedGoals = Auth::user()->goals()
-                               ->onlyTrashed() // Chỉ lấy các mục đã xóa mềm
+        $trashedGoals = Goal::onlyTrashed()
+                               ->where('user_id', Auth::id())
                                ->orderBy('deleted_at', 'desc')
                                ->paginate(10);
 
@@ -249,7 +249,7 @@ class GoalController extends Controller
      */
     public function restore($goalId)
     {
-        $goal = Auth::user()->goals()->onlyTrashed()->findOrFail($goalId);
+        $goal = Goal::onlyTrashed()->where('user_id', Auth::id())->findOrFail($goalId);
         
         $goal->restore();
 
@@ -270,7 +270,7 @@ class GoalController extends Controller
      */
     public function forceDelete($goalId)
     {
-        $goal = Auth::user()->goals()->onlyTrashed()->find($goalId);
+        $goal = Goal::onlyTrashed()->where('user_id', Auth::id())->find($goalId);
 
         if (!$goal) {
             return response()->json(['message' => 'Goal not found in trash'], 404);
