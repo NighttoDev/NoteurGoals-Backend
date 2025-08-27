@@ -14,6 +14,84 @@ use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
+    /**
+     * Trả về trạng thái auto-renewal hiện tại cho user.
+     * GET /api/subscriptions/auto-renewal
+     */
+    public function autoRenewalStatus()
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            $current = UserSubscription::where('user_id', $user->user_id)
+                ->where('payment_status', 'active')
+                ->with('plan')
+                ->latest('created_at')
+                ->first();
+
+            $setting = \App\Models\AutoRenewalSettings::where('user_id', $user->user_id)->first();
+
+            return response()->json([
+                'enabled' => (bool) $setting && (bool) $current, 
+                'plan_id' => $setting?->renewal_plan_id ?? $current?->plan_id,
+                'current_subscription' => $current,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('autoRenewalStatus error: '.$e->getMessage());
+            return response()->json(['message' => 'Internal server error.'], 500);
+        }
+    }
+
+    /**
+     * Bật/tắt auto-renewal cho user hiện tại.
+     * POST /api/subscriptions/auto-renewal/toggle
+     * Body: { enabled: boolean, plan_id?: number }
+     */
+    public function toggleAutoRenewal(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            $validated = \Validator::make($request->all(), [
+                'enabled' => 'required|boolean',
+                'plan_id' => 'nullable|integer|exists:SubscriptionPlans,plan_id',
+            ])->validate();
+
+            $current = UserSubscription::where('user_id', $user->user_id)
+                ->where('payment_status', 'active')
+                ->latest('created_at')
+                ->first();
+
+            if (!$current && ($validated['enabled'] ?? false)) {
+                return response()->json(['message' => 'No active subscription to enable auto-renewal.'], 422);
+            }
+
+            $planId = $validated['plan_id'] ?? $current?->plan_id;
+
+            if (!($validated['enabled'])) {
+                // Tắt auto-renewal: xóa cài đặt nếu có
+                \App\Models\AutoRenewalSettings::where('user_id', $user->user_id)->delete();
+                return response()->json(['message' => 'Auto-renewal disabled successfully.', 'enabled' => false]);
+            }
+
+            // Bật auto-renewal: upsert bản ghi theo user_id
+            \App\Models\AutoRenewalSettings::updateOrCreate(
+                ['user_id' => $user->user_id],
+                ['renewal_plan_id' => $planId]
+            );
+
+            return response()->json(['message' => 'Auto-renewal enabled successfully.', 'enabled' => true, 'plan_id' => $planId]);
+        } catch (\Throwable $e) {
+            \Log::error('toggleAutoRenewal error: '.$e->getMessage());
+            return response()->json(['message' => 'Internal server error.'], 500);
+        }
+    }
     // Lấy thông tin chi tiết của một gói đăng ký.
     public function show($planId)
     {
