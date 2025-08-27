@@ -66,6 +66,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/cancel/{subscription}', 'cancel');
         Route::post('/renew', 'renew');
         Route::get('/plans/{plan}', 'show');
+        // Auto-renewal status & toggle
+        Route::get('/auto-renewal', 'autoRenewalStatus');
+        Route::post('/auto-renewal/toggle', 'toggleAutoRenewal');
     });
 
     Route::prefix('payment')->controller(PaymentController::class)->group(function() {
