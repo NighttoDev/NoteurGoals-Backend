@@ -20,9 +20,9 @@ class UserController extends Controller
     {
         $user = $request->user()->load('profile');
 
-        // Đảm bảo avatar_url luôn là URL tuyệt đối khi trả về
+        // Đảm bảo avatar_url luôn là URL tuyệt đối khi trả về (lưu trong DB dạng tương đối)
         if ($user->avatar_url && !filter_var($user->avatar_url, FILTER_VALIDATE_URL)) {
-             $user->avatar_url = asset($user->avatar_url);
+            $user->avatar_url = asset($user->avatar_url);
         }
 
         return response()->json([
@@ -56,15 +56,19 @@ class UserController extends Controller
             }
 
             if ($request->hasFile('avatar')) {
+                // Delete old avatar safely (supports absolute or relative URLs)
                 if ($user->avatar_url) {
-                    $oldPath = str_replace(asset('/storage').'/', '', $user->avatar_url);
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
+                    $pathUrl = parse_url($user->avatar_url, PHP_URL_PATH) ?: '';
+                    // Convert '/storage/foo/bar.png' to 'foo/bar.png'
+                    $oldRelativePath = ltrim(str_replace('/storage/', '', $pathUrl), '/');
+                    if (!empty($oldRelativePath) && Storage::disk('public')->exists($oldRelativePath)) {
+                        Storage::disk('public')->delete($oldRelativePath);
                     }
                 }
                 
+                // Store new avatar and persist relative path (portable across envs)
                 $path = $request->file('avatar')->store('avatars', 'public');
-                $user->avatar_url = asset(Storage::url($path));
+                $user->avatar_url = Storage::url($path); // e.g. '/storage/avatars/xxx.png'
             }
 
             $user->save();
