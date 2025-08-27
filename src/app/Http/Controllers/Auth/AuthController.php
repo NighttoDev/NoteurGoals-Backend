@@ -50,22 +50,22 @@ class AuthController extends Controller
             ]);
 
             // Tái sử dụng hàm gửi email chung
-            $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
-            $line1 = "Cảm ơn bạn đã đăng ký. Mã xác thực của bạn là: {$otp}";
+            $subject = "{$otp} is your verification code for NoteurGoals account";
+            $line1 = "Thank you for registering. Your verification code is: {$otp}";
             $this->sendOtpEmail($user, $subject, $line1);
 
             DB::commit();
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Mã xác thực đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư.',
+                'message' => 'A verification code has been sent to your email. Please check your email.',
                 'data' => ['email' => $user->email]
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Lỗi khi đăng ký (OTP Flow): ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Đã có lỗi xảy ra phía máy chủ, không thể hoàn tất đăng ký.'], 500);
+            Log::error('An error occurred when registering (OTP Flow): ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'An error occurred when registering.'], 500);
         }
     }
     /**
@@ -79,13 +79,13 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => 'error', 'message' => 'Data is not valid.', 'errors' => $validator->errors()], 422);
         }
         
         $user = User::where('email', $request->email)->where('status', 'unverified')->first();
 
         if (!$user || $user->verification_token !== $request->otp || Carbon::parse($user->created_at)->addMinutes(10)->isPast()) {
-            return response()->json(['status' => 'error', 'message' => 'Mã OTP không hợp lệ hoặc đã hết hạn.'], 400);
+            return response()->json(['status' => 'error', 'message' => 'The OTP is invalid or has expired.'], 400);
         }
 
         $user->status = 'active';
@@ -95,7 +95,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
         $user->load('profile');
 
-        return response()->json(['status' => 'success', 'message' => 'Tài khoản đã được xác thực thành công!', 'data' => ['token' => $token, 'user' => $user]]);
+        return response()->json(['status' => 'success', 'message' => 'Account verified successfully!', 'data' => ['token' => $token, 'user' => $user]]);
     }
     /**
      * [HOÀN CHỈNH] Gửi lại email xác thực
@@ -107,7 +107,7 @@ class AuthController extends Controller
         
         $user = User::where('email', $request->email)->where('status', 'unverified')->first();
         if (!$user) {
-            return response()->json(['status' => 'error', 'message' => 'Tài khoản này không tồn tại hoặc đã được xác thực.'], 400);
+            return response()->json(['status' => 'error', 'message' => 'This account does not exist or has been verified.'], 400);
         }
         
         try {
@@ -117,14 +117,14 @@ class AuthController extends Controller
             $user->save();
             
             // Tái sử dụng hàm gửi email chung
-            $subject = "{$otp} là mã xác thực tài khoản NoteurGoals của bạn";
-            $line1 = "Đây là mã xác thực mới của bạn: {$otp}";
+            $subject = "{$otp} is your new verification code for NoteurGoals account";
+            $line1 = "Here is your new verification code: {$otp}";
             $this->sendOtpEmail($user, $subject, $line1);
 
-            return response()->json(['status' => 'success', 'message' => 'Một mã xác thực mới đã được gửi đến email của bạn.']);
+            return response()->json(['status' => 'success', 'message' => 'A new verification code has been sent to your email.']);
         } catch (\Exception $e) {
-            Log::error('Lỗi gửi lại email OTP: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra khi gửi lại email.'], 500);
+            Log::error('An error occurred when resending OTP email: ' . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => 'An error occurred when resending email.'], 500);
         }
     }
 
@@ -139,7 +139,7 @@ class AuthController extends Controller
             $messageLines[] = $line2;
             $messageLines[] = "";
         }
-        $messageLines = array_merge($messageLines, ["Mã này sẽ hết hạn trong vòng 10 phút. Vui lòng không chia sẻ mã này với bất kỳ ai.", "", "Trân trọng,", "Đội ngũ NoteurGoals"]);
+        $messageLines = array_merge($messageLines, ["This code will expire in 10 minutes. Please do not share this code with anyone.", "", "Regards,", "NoteurGoals Team"]);
         $message = implode("\n", $messageLines);
         
         try {
@@ -147,7 +147,7 @@ class AuthController extends Controller
                 $mail->to($user->email)->subject($subject);
             });
         } catch (\Exception $e) {
-            Log::error("Lỗi gửi email OTP đến {$user->email}: " . $e->getMessage());
+            Log::error("An error occurred when sending OTP email to {$user->email}: " . $e->getMessage());
             // Ném lại lỗi để transaction có thể rollback
             throw $e;
         }
@@ -165,7 +165,7 @@ class AuthController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Dữ liệu không hợp lệ',
+                'message' => 'Data is not valid',
                 'errors' => $validator->errors()
             ], 422);
         }
@@ -178,7 +178,7 @@ class AuthController extends Controller
             if (!$user || !Hash::check($request->password, $user->password_hash)) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Email hoặc mật khẩu không đúng'
+                    'message' => 'Email or password is incorrect'
                 ], 401);
             }
 
@@ -186,7 +186,7 @@ class AuthController extends Controller
             if ($user->status === 'unverified') {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tài khoản chưa được xác thực. Vui lòng kiểm tra email để xác thực tài khoản.',
+                    'message' => 'Account is not verified. Please check your email to verify your account.',
                     'verification_required' => true,
                     'user_email' => $user->email
                 ], 403);
@@ -196,7 +196,7 @@ class AuthController extends Controller
             if ($user->status === 'banned') {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.'
+                    'message' => 'Your account has been banned. Please contact support.'
                 ], 403);
             }
 
@@ -212,7 +212,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Đăng nhập thành công',
+                'message' => 'Login successfully',
                 'data' => [
                     'user' => $user,
                     'token' => $token
@@ -223,7 +223,7 @@ class AuthController extends Controller
             
             return response()->json([
                 'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi đăng nhập',
+                'message' => 'An error occurred when logging in',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
@@ -255,14 +255,14 @@ class AuthController extends Controller
             
             return response()->json([
                 'status' => 'success',
-                'message' => 'Đăng xuất thành công'
+                'message' => 'Logout successfully'
             ]);
         } catch (\Exception $e) {
-            Log::error('Lỗi đăng xuất: ' . $e->getMessage());
+            Log::error('An error occurred when logging out: ' . $e->getMessage());
             
             return response()->json([
                 'status' => 'error',
-                'message' => 'Có lỗi xảy ra khi đăng xuất',
+                'message' => 'An error occurred when logging out',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
@@ -293,14 +293,14 @@ class AuthController extends Controller
             $user->save();
 
             // Tái sử dụng hàm gửi email chung với nội dung khác
-            $subject = "Mã OTP đặt lại mật khẩu NoteurGoals của bạn là {$otp}";
-            $line1 = "Bạn đã yêu cầu đặt lại mật khẩu. Mã xác thực của bạn là: {$otp}";
-            $line2 = "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.";
+            $subject = "Your OTP to reset your NoteurGoals password is {$otp}";
+            $line1 = "You have requested to reset your password. Your verification code is: {$otp}";
+            $line2 = "If you did not request this, please ignore this email.";
             $this->sendOtpEmail($user, $subject, $line1, $line2);
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Mã OTP để đặt lại mật khẩu đã được gửi đến email của bạn.',
+                'message' => 'The OTP to reset your password has been sent to your email.',
                 'data' => [
                     'reset_token' => $resetToken,
                     'email' => $user->email,
@@ -308,7 +308,7 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Lỗi quên mật khẩu: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra, không thể gửi email đặt lại mật khẩu.'], 500);
+            return response()->json(['status' => 'error', 'message' => 'An error occurred, unable to send reset password email.'], 500);
         }
     }
 
@@ -325,7 +325,7 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => 'Dữ liệu không hợp lệ.', 'errors' => $validator->errors()], 422);
+            return response()->json(['status' => 'error', 'message' => 'Data is not valid.', 'errors' => $validator->errors()], 422);
         }
 
         try {
@@ -334,7 +334,7 @@ class AuthController extends Controller
                         ->first();
             
             if (!$user || $user->verification_token !== $request->otp || Carbon::parse($user->created_at)->addMinutes(10)->isPast()) {
-                return response()->json(['status' => 'error', 'message' => 'Mã OTP hoặc token không hợp lệ, hoặc đã hết hạn.'], 400);
+                return response()->json(['status' => 'error', 'message' => 'The OTP or token is invalid, or has expired.'], 400);
             }
 
             $user->password_hash = Hash::make($request->password);
@@ -342,10 +342,10 @@ class AuthController extends Controller
             $user->verification_token = null;
             $user->save();
 
-            return response()->json(['status' => 'success', 'message' => 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay bây giờ.']);
+            return response()->json(['status' => 'success', 'message' => 'Reset password successfully. You can login now.']);
         } catch (\Exception $e) {
             Log::error('Lỗi đặt lại mật khẩu: ' . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => 'Có lỗi xảy ra khi đặt lại mật khẩu.'], 500);
+            return response()->json(['status' => 'error', 'message' => 'An error occurred when resetting password.'], 500);
         }
     }
 
